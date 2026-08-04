@@ -190,7 +190,7 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
             padding: const EdgeInsets.symmetric(vertical: 6),
             alignment: Alignment.center,
             child: Text(
-              'الفترة: $_periodText()',
+              'الفترة: ${_periodText()}',
               style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
             ),
           ),
