@@ -480,3 +480,66 @@ class AppProvider extends ChangeNotifier {
         where: 'id = ?', whereArgs: [productId]);
   }
 }
+
+  // ==================== SUPPLIERS ====================
+
+  Future<List<Supplier>> getSuppliers() async {
+    final results = await DatabaseHelper.getSuppliers();
+    return results.map((e) => Supplier.fromMap(e)).toList();
+  }
+
+  Future<Supplier?> getSupplierById(int id) async {
+    final result = await DatabaseHelper.getSupplierById(id);
+    return result != null ? Supplier.fromMap(result) : null;
+  }
+
+  Future<int> addSupplier(Supplier supplier) async {
+    final result = await DatabaseHelper.insertSupplier(supplier.toMap());
+    notifyListeners();
+    return result;
+  }
+
+  Future<int> updateSupplier(Supplier supplier) async {
+    final result = await DatabaseHelper.updateSupplier(supplier.id!, supplier.toMap());
+    notifyListeners();
+    return result;
+  }
+
+  Future<int> deleteSupplier(int id) async {
+    final result = await DatabaseHelper.deleteSupplier(id);
+    notifyListeners();
+    return result;
+  }
+
+  // ==================== PURCHASES ====================
+
+  Future<int> createPurchaseInvoice(PurchaseInvoice invoice, List<PurchaseItem> items) async {
+    final result = await DatabaseHelper.insertPurchaseInvoice(
+      invoice.toMap(),
+      items.map((e) => e.toMap()).toList(),
+    );
+    notifyListeners();
+    return result;
+  }
+
+  Future<List<PurchaseInvoice>> getPurchaseInvoices({int? supplierId}) async {
+    final results = await DatabaseHelper.getPurchaseInvoices(supplierId: supplierId);
+    return results.map((e) => PurchaseInvoice.fromMap(e)).toList();
+  }
+
+  Future<List<PurchaseItem>> getPurchaseItems(int invoiceId) async {
+    final results = await DatabaseHelper.getPurchaseItems(invoiceId);
+    return results.map((e) => PurchaseItem.fromMap(e)).toList();
+  }
+
+  // ==================== PAYMENTS & LEDGER ====================
+
+  Future<int> addSupplierPayment(SupplierPayment payment) async {
+    final result = await DatabaseHelper.insertSupplierPayment(payment.toMap());
+    notifyListeners();
+    return result;
+  }
+
+  Future<List<Map<String, dynamic>>> getSupplierLedger(int supplierId) async {
+    return await DatabaseHelper.getSupplierLedger(supplierId);
+  }

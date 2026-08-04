@@ -154,6 +154,70 @@ class DatabaseHelper {
       'password': Constants.defaultPassword,
       'role': 'manager',
     });
+
+    // Version 4 tables
+    await _createVersion4Tables(db);
+  }
+
+  static Future<void> _createVersion4Tables(Database db) async {
+    // Suppliers table
+    await db.execute('''
+      CREATE TABLE suppliers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        phone TEXT,
+        address TEXT,
+        notes TEXT,
+        balance REAL NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    ''');
+
+    // Purchase Invoices table
+    await db.execute('''
+      CREATE TABLE purchase_invoices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplier_id INTEGER NOT NULL,
+        invoice_number TEXT NOT NULL,
+        total_amount REAL NOT NULL DEFAULT 0,
+        paid_amount REAL NOT NULL DEFAULT 0,
+        status TEXT NOT NULL, -- paid, partial, unpaid
+        notes TEXT,
+        date TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE RESTRICT
+      )
+    ''');
+
+    // Purchase Items table
+    await db.execute('''
+      CREATE TABLE purchase_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        purchase_invoice_id INTEGER NOT NULL,
+        ingredient_id INTEGER NOT NULL,
+        quantity REAL NOT NULL DEFAULT 0,
+        unit_cost REAL NOT NULL DEFAULT 0,
+        total_cost REAL NOT NULL DEFAULT 0,
+        FOREIGN KEY (purchase_invoice_id) REFERENCES purchase_invoices(id) ON DELETE CASCADE,
+        FOREIGN KEY (ingredient_id) REFERENCES inventory(id) ON DELETE RESTRICT
+      )
+    ''');
+
+    // Supplier Payments table
+    await db.execute('''
+      CREATE TABLE supplier_payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        supplier_id INTEGER NOT NULL,
+        purchase_invoice_id INTEGER,
+        amount REAL NOT NULL DEFAULT 0,
+        date TEXT NOT NULL,
+        notes TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
+        FOREIGN KEY (purchase_invoice_id) REFERENCES purchase_invoices(id) ON DELETE SET NULL
+      )
+    ''');
   }
 
   static Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -189,6 +253,11 @@ class DatabaseHelper {
     // Migration from v2 to v3: Add payment_method column to invoices
     if (oldVersion < 3) {
       await db.execute('ALTER TABLE invoices ADD COLUMN payment_method TEXT NOT NULL DEFAULT "cash"');
+    }
+
+    // Migration from v3 to v4: Add purchases and suppliers
+    if (oldVersion < 4) {
+      await _createVersion4Tables(db);
     }
   }
 
@@ -311,3 +380,169 @@ class DatabaseHelper {
     }
   }
 }
+
+  // ==================== SUPPLIERS CRUD ====================
+
+  static Future<int> insertSupplier(Map<String, dynamic> supplier) async {
+    final db = await database;
+    supplier['created_at'] = DateTime.now().toIso8601String();
+    supplier['updated_at'] = DateTime.now().toIso8601String();
+    return await db.insert('suppliers', supplier);
+  }
+
+  static Future<List<Map<String, dynamic>>> getSuppliers() async {
+    final db = await database;
+    return await db.query('suppliers', orderBy: 'name ASC');
+  }
+
+  static Future<Map<String, dynamic>?> getSupplierById(int id) async {
+    final db = await database;
+    final results = await db.query('suppliers', where: 'id = ?', whereArgs: [id]);
+    return results.isNotEmpty ? results.first : null;
+  }
+
+  static Future<int> updateSupplier(int id, Map<String, dynamic> supplier) async {
+    final db = await database;
+    supplier['updated_at'] = DateTime.now().toIso8601String();
+    return await db.update('suppliers', supplier, where: 'id = ?', whereArgs: [id]);
+  }
+
+  static Future<int> deleteSupplier(int id) async {
+    final db = await database;
+    return await db.delete('suppliers', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ==================== PURCHASES CRUD & LOGIC ====================
+
+  static Future<int> insertPurchaseInvoice(Map<String, dynamic> invoice, List<Map<String, dynamic>> items) async {
+    final db = await database;
+    return await db.transaction((txn) async {
+      // 1. Insert Invoice
+      invoice['created_at'] = DateTime.now().toIso8601String();
+      final invoiceId = await txn.insert('purchase_invoices', invoice);
+
+      // 2. Process Items
+      for (var item in items) {
+        final ingredientId = item['ingredient_id'] as int;
+        final newQty = (item['quantity'] as num).toDouble();
+        final newCost = (item['unit_cost'] as num).toDouble();
+
+        // Get old data for weighted average cost
+        final oldData = await txn.query('inventory', columns: ['quantity', 'cost_price'], where: 'id = ?', whereArgs: [ingredientId]);
+        if (oldData.isNotEmpty) {
+          final oldQty = (oldData.first['quantity'] as num).toDouble();
+          final oldCost = (oldData.first['cost_price'] as num).toDouble();
+
+          // Calculate weighted average cost
+          double averageCost = newCost;
+          if (oldQty + newQty > 0) {
+            averageCost = (oldQty * oldCost + newQty * newCost) / (oldQty + newQty);
+          }
+
+          // Update Inventory: Quantity and Cost Price
+          await txn.rawUpdate(
+            'UPDATE inventory SET quantity = quantity + ?, cost_price = ?, updated_at = ? WHERE id = ?',
+            [newQty, averageCost, DateTime.now().toIso8601String(), ingredientId],
+          );
+        }
+
+        // Insert Purchase Item
+        item['purchase_invoice_id'] = invoiceId;
+        await txn.insert('purchase_items', item);
+      }
+
+      // 3. Update Supplier Balance
+      final totalAmount = (invoice['total_amount'] as num).toDouble();
+      final paidAmount = (invoice['paid_amount'] as num).toDouble();
+      final remaining = totalAmount - paidAmount;
+
+      if (remaining != 0) {
+        await txn.rawUpdate(
+          'UPDATE suppliers SET balance = balance + ?, updated_at = ? WHERE id = ?',
+          [remaining, DateTime.now().toIso8601String(), invoice['supplier_id']],
+        );
+      }
+
+      return invoiceId;
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> getPurchaseInvoices({int? supplierId}) async {
+    final db = await database;
+    if (supplierId != null) {
+      return await db.rawQuery('''
+        SELECT pi.*, s.name as supplier_name 
+        FROM purchase_invoices pi
+        INNER JOIN suppliers s ON pi.supplier_id = s.id
+        WHERE pi.supplier_id = ?
+        ORDER BY pi.date DESC
+      ''', [supplierId]);
+    } else {
+      return await db.rawQuery('''
+        SELECT pi.*, s.name as supplier_name 
+        FROM purchase_invoices pi
+        INNER JOIN suppliers s ON pi.supplier_id = s.id
+        ORDER BY pi.date DESC
+      ''');
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> getPurchaseItems(int invoiceId) async {
+    final db = await database;
+    return await db.rawQuery('''
+      SELECT pit.*, inv.name as ingredient_name
+      FROM purchase_items pit
+      INNER JOIN inventory inv ON pit.ingredient_id = inv.id
+      WHERE pit.purchase_invoice_id = ?
+    ''', [invoiceId]);
+  }
+
+  // ==================== PAYMENTS CRUD ====================
+
+  static Future<int> insertSupplierPayment(Map<String, dynamic> payment) async {
+    final db = await database;
+    return await db.transaction((txn) async {
+      payment['created_at'] = DateTime.now().toIso8601String();
+      final paymentId = await txn.insert('supplier_payments', payment);
+
+      // Deduct from supplier balance
+      final amount = (payment['amount'] as num).toDouble();
+      await txn.rawUpdate(
+        'UPDATE suppliers SET balance = balance - ?, updated_at = ? WHERE id = ?',
+        [amount, DateTime.now().toIso8601String(), payment['supplier_id']],
+      );
+
+      return paymentId;
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> getSupplierLedger(int supplierId) async {
+    final db = await database;
+    // Combined list of invoices (debit) and payments (credit)
+    final invoices = await db.query('purchase_invoices', where: 'supplier_id = ?', whereArgs: [supplierId]);
+    final payments = await db.query('supplier_payments', where: 'supplier_id = ?', whereArgs: [supplierId]);
+
+    List<Map<String, dynamic>> ledger = [];
+    for (var inv in invoices) {
+      ledger.add({
+        'type': 'invoice',
+        'id': inv['id'],
+        'number': inv['invoice_number'],
+        'amount': inv['total_amount'],
+        'date': inv['date'],
+        'notes': inv['notes'],
+      });
+    }
+    for (var pay in payments) {
+      ledger.add({
+        'type': 'payment',
+        'id': pay['id'],
+        'amount': pay['amount'],
+        'date': pay['date'],
+        'notes': pay['notes'],
+      });
+    }
+
+    ledger.sort((a, b) => (b['date'] as String).compareTo(a['date'] as String));
+    return ledger;
+  }

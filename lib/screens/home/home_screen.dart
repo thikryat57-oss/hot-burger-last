@@ -9,6 +9,7 @@ import '../expenses/expenses_screen.dart';
 import '../reports/reports_screen.dart';
 import '../backup/backup_screen.dart';
 import '../inventory/inventory_screen.dart';
+import '../more/more_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -25,7 +26,7 @@ class HomeScreen extends StatelessWidget {
           const InventoryScreen(),
           const ExpensesScreen(),
           const ReportsScreen(),
-          const BackupScreen(),
+          const MoreScreen(),
         ];
 
         return Scaffold(
@@ -63,8 +64,8 @@ class HomeScreen extends StatelessWidget {
                 label: 'التقارير',
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.backup),
-                label: 'النسخ',
+                icon: Icon(Icons.more_horiz),
+                label: 'المزيد',
               ),
             ],
           ),
