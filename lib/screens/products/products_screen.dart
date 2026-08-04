@@ -302,45 +302,79 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           product.name,
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
-                        subtitle: product.categoryName != null
-                            ? Text('التصنيف: ${product.categoryName}')
-                            : const Text('بدون تصنيف'),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(product.categoryName != null
+                                ? 'التصنيف: ${product.categoryName}'
+                                : 'بدون تصنيف'),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text(
+                                  'التكلفة: ${product.cost.toStringAsFixed(2)}',
+                                  style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  'الربح: ${(product.price - product.cost).toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: (product.price - product.cost) >= 0
+                                        ? AppTheme.successColor
+                                        : AppTheme.errorColor,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
                               icon: const Icon(Icons.restaurant_menu, color: AppTheme.accentColor, size: 22),
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => RecipeManagementScreen(product: product),
-                                ),
-                              ),
+                              onPressed: () async {
+                                await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => RecipeManagementScreen(product: product),
+                                  ),
+                                );
+                                _loadProducts(); // Reload to update cost
+                              },
                               tooltip: 'إدارة الوصفة',
                             ),
-                            Text(
-                              '${product.price.toStringAsFixed(2)} ج.س',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.primaryColor,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            if (product.isAvailable)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppTheme.successColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  'متاح',
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '${product.price.toStringAsFixed(2)} ج.س',
                                   style: TextStyle(
-                                    fontSize: 10,
-                                    color: AppTheme.successColor,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.primaryColor,
                                   ),
                                 ),
-                              ),
+                                if (product.isAvailable)
+                                  Container(
+                                    margin: const EdgeInsets.only(top: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.successColor.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'متاح',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: AppTheme.successColor,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ],
                         ),
                         onTap: () => _showEditProductDialog(product),

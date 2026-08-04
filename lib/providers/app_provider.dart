@@ -437,6 +437,7 @@ class AppProvider extends ChangeNotifier {
 
   Future<int> addProductIngredient(ProductIngredient link) async {
     final result = await DatabaseHelper.insertProductIngredient(link.toMap());
+    await updateProductCost(link.productId);
     notifyListeners();
     return result;
   }
@@ -447,12 +448,14 @@ class AppProvider extends ChangeNotifier {
 
   Future<int> deleteProductIngredient(int productId, int ingredientId) async {
     final result = await DatabaseHelper.deleteProductIngredient(productId, ingredientId);
+    await updateProductCost(productId);
     notifyListeners();
     return result;
   }
 
   Future<int> deleteAllProductIngredients(int productId) async {
     final result = await DatabaseHelper.deleteAllProductIngredients(productId);
+    await updateProductCost(productId);
     notifyListeners();
     return result;
   }
@@ -460,5 +463,20 @@ class AppProvider extends ChangeNotifier {
   Future<void> deductProductIngredients(int productId, int soldQuantity) async {
     await DatabaseHelper.deductProductIngredients(productId, soldQuantity);
     notifyListeners();
+  }
+
+  Future<void> updateProductCost(int productId) async {
+    final ingredients = await DatabaseHelper.getProductIngredients(productId);
+    double totalCost = 0;
+    for (var item in ingredients) {
+      final qty = (item['quantity'] as num).toDouble();
+      final costPrice = await _db!.query('inventory',
+          columns: ['cost_price'], where: 'id = ?', whereArgs: [item['ingredient_id']]);
+      if (costPrice.isNotEmpty) {
+        totalCost += qty * (costPrice.first['cost_price'] as num).toDouble();
+      }
+    }
+    await _db!.update('products', {'cost': totalCost},
+        where: 'id = ?', whereArgs: [productId]);
   }
 }
