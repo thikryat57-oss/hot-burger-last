@@ -298,8 +298,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
+      body: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Column(
+          children: [
           // Low stock warning banner
           if (_lowStock.isNotEmpty)
             Container(
@@ -420,23 +422,20 @@ class _InventoryScreenState extends State<InventoryScreen> {
                               subtitle: Padding(
                                 padding: const EdgeInsets.only(top: 4),
                                 child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.start,
                                   children: [
-                                    Flexible(
-                                      child: Text(
-                                        '${ingredient.quantity} ${ingredient.unit}',
-                                        style: TextStyle(
-                                          color: isLow ? AppTheme.warningColor : AppTheme.primaryColor,
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 14,
-                                        ),
+                                    Text(
+                                      '${ingredient.quantity} ${ingredient.unit}',
+                                      style: TextStyle(
+                                        color: isLow ? AppTheme.warningColor : AppTheme.primaryColor,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
                                       ),
                                     ),
-                                    const SizedBox(width: 12),
-                                    Flexible(
-                                      child: Text(
-                                        'الحد: ${ingredient.minQuantity} ${ingredient.unit}',
-                                        style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-                                      ),
+                                    const SizedBox(width: 16),
+                                    Text(
+                                      'الحد: ${ingredient.minQuantity} ${ingredient.unit}',
+                                      style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
                                     ),
                                   ],
                                 ),
@@ -480,7 +479,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         },
                       ),
           ),
-        ],
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddIngredientDialog,
