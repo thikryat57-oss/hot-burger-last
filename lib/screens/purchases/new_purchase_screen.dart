@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:ui' as ui;
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
 import '../../models/models.dart';
@@ -30,7 +31,7 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
         title: const Text('فاتورة شراء جديدة'),
       ),
       body: Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: ui.TextDirection.rtl,
         child: Column(
           children: [
             // Header Info

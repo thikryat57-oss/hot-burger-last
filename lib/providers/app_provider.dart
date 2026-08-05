@@ -502,3 +502,22 @@ class AppProvider extends ChangeNotifier {
     return await DatabaseHelper.getSupplierLedger(supplierId);
   }
 }
+
+  // ==================== RECIPE MANAGEMENT ====================
+
+  Future<int> addProductIngredient(ProductIngredient link) async {
+    final result = await DatabaseHelper.insertProductIngredient(link.toMap());
+    notifyListeners();
+    return result;
+  }
+
+  Future<List<Map<String, dynamic>>> getProductIngredients(int productId) async {
+    return await DatabaseHelper.getProductIngredients(productId);
+  }
+
+  Future<int> deleteProductIngredient(int productId, int ingredientId) async {
+    final result = await DatabaseHelper.deleteProductIngredient(productId, ingredientId);
+    notifyListeners();
+    return result;
+  }
+}
