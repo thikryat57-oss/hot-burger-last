@@ -379,7 +379,6 @@ class DatabaseHelper {
       _database = null;
     }
   }
-}
 
   // ==================== SUPPLIERS CRUD ====================
 
@@ -546,3 +545,4 @@ class DatabaseHelper {
     ledger.sort((a, b) => (b['date'] as String).compareTo(a['date'] as String));
     return ledger;
   }
+}

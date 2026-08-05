@@ -420,68 +420,32 @@ class AppProvider extends ChangeNotifier {
     return result;
   }
 
-  // Record a purchase: increase ingredient quantity
-  Future<void> recordPurchase(int ingredientId, double purchasedQuantity, double cost) async {
-    await DatabaseHelper.updateIngredient(ingredientId, {
-      'quantity': null, // will be incremented via rawUpdate
-    });
-    await DatabaseHelper.updateIngredientQuantity(ingredientId, purchasedQuantity);
-    // Update cost price if provided
-    if (cost > 0) {
-      await DatabaseHelper.updateIngredient(ingredientId, {'cost_price': cost});
-    }
-    notifyListeners();
-  }
-
-  // ==================== PRODUCT-INGREDIENTS (RECIPE) ====================
-
-  Future<int> addProductIngredient(ProductIngredient link) async {
-    final result = await DatabaseHelper.insertProductIngredient(link.toMap());
-    await updateProductCost(link.productId);
-    notifyListeners();
-    return result;
-  }
-
-  Future<List<Map<String, dynamic>>> getProductIngredients(int productId) async {
-    return await DatabaseHelper.getProductIngredients(productId);
-  }
-
-  Future<int> deleteProductIngredient(int productId, int ingredientId) async {
-    final result = await DatabaseHelper.deleteProductIngredient(productId, ingredientId);
-    await updateProductCost(productId);
-    notifyListeners();
-    return result;
-  }
-
-  Future<int> deleteAllProductIngredients(int productId) async {
-    final result = await DatabaseHelper.deleteAllProductIngredients(productId);
-    await updateProductCost(productId);
-    notifyListeners();
-    return result;
-  }
-
-  Future<void> deductProductIngredients(int productId, int soldQuantity) async {
-    await DatabaseHelper.deductProductIngredients(productId, soldQuantity);
-    notifyListeners();
-  }
-
-  Future<void> updateProductCost(int productId) async {
-    final ingredients = await DatabaseHelper.getProductIngredients(productId);
-    double totalCost = 0;
-    for (var item in ingredients) {
-      final qty = (item['quantity'] as num).toDouble();
-      final costPrice = await _db!.query('inventory',
-          columns: ['cost_price'], where: 'id = ?', whereArgs: [item['ingredient_id']]);
-      if (costPrice.isNotEmpty) {
-        totalCost += qty * (costPrice.first['cost_price'] as num).toDouble();
+  Future<void> recordPurchase(int ingredientId, double quantity, double cost) async {
+    final ingredient = await DatabaseHelper.getIngredientById(ingredientId);
+    if (ingredient.isNotEmpty) {
+      final oldQty = (ingredient.first['quantity'] as num).toDouble();
+      final oldCost = (ingredient.first['cost_price'] as num).toDouble();
+      
+      double newCost = oldCost;
+      if (cost > 0) {
+        newCost = (oldQty * oldCost + quantity * cost) / (oldQty + quantity);
       }
+      
+      await DatabaseHelper.updateIngredient(ingredientId, {
+        'quantity': oldQty + quantity,
+        'cost_price': newCost,
+      });
+      notifyListeners();
     }
-    await _db!.update('products', {'cost': totalCost},
-        where: 'id = ?', whereArgs: [productId]);
   }
-}
 
-  // ==================== SUPPLIERS ====================
+  // ==================== SUPPLIERS CRUD ====================
+
+  Future<int> addSupplier(Supplier supplier) async {
+    final result = await DatabaseHelper.insertSupplier(supplier.toMap());
+    notifyListeners();
+    return result;
+  }
 
   Future<List<Supplier>> getSuppliers() async {
     final results = await DatabaseHelper.getSuppliers();
@@ -491,12 +455,6 @@ class AppProvider extends ChangeNotifier {
   Future<Supplier?> getSupplierById(int id) async {
     final result = await DatabaseHelper.getSupplierById(id);
     return result != null ? Supplier.fromMap(result) : null;
-  }
-
-  Future<int> addSupplier(Supplier supplier) async {
-    final result = await DatabaseHelper.insertSupplier(supplier.toMap());
-    notifyListeners();
-    return result;
   }
 
   Future<int> updateSupplier(Supplier supplier) async {
@@ -543,3 +501,4 @@ class AppProvider extends ChangeNotifier {
   Future<List<Map<String, dynamic>>> getSupplierLedger(int supplierId) async {
     return await DatabaseHelper.getSupplierLedger(supplierId);
   }
+}
