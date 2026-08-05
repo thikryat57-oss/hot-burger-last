@@ -55,12 +55,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   TextField(
                     controller: nameController,
                     decoration: const InputDecoration(hintText: 'اسم المادة الخام'),
+                    textInputAction: TextInputAction.next,
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: quantityController,
                     decoration: const InputDecoration(hintText: 'الكمية الحالية'),
                     keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.next,
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -78,12 +80,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     controller: minQuantityController,
                     decoration: const InputDecoration(hintText: 'حد التنبيه بالنفاد'),
                     keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.next,
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: costPriceController,
                     decoration: const InputDecoration(hintText: 'سعر التكلفة'),
                     keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
                   ),
                 ],
               ),
@@ -137,12 +141,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   TextField(
                     controller: nameController,
                     decoration: const InputDecoration(hintText: 'اسم المادة الخام'),
+                    textInputAction: TextInputAction.next,
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: quantityController,
                     decoration: const InputDecoration(hintText: 'الكمية الحالية'),
                     keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.next,
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -160,12 +166,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     controller: minQuantityController,
                     decoration: const InputDecoration(hintText: 'حد التنبيه بالنفاد'),
                     keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.next,
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: costPriceController,
                     decoration: const InputDecoration(hintText: 'سعر التكلفة'),
                     keyboardType: TextInputType.number,
+                    textInputAction: TextInputAction.done,
                   ),
                 ],
               ),
@@ -223,12 +231,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   hintText: 'الكمية المشتراة (${ingredient.unit})',
                 ),
                 keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.next,
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: costController,
                 decoration: const InputDecoration(hintText: 'سعر الشراء (اختياري)'),
                 keyboardType: TextInputType.number,
+                textInputAction: TextInputAction.done,
               ),
             ],
           ),
@@ -374,7 +384,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                               side: isLow
-                                  ? BorderSide(color: AppTheme.warningColor, width: 1.5)
+                                  ? BorderSide(color: AppTheme.warningColor, width: 1)
                                   : BorderSide.none,
                             ),
                             child: ListTile(
@@ -399,20 +409,22 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                     child: Text(
                                       ingredient.name,
                                       style: const TextStyle(fontWeight: FontWeight.w600),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                   if (isLow)
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                       decoration: BoxDecoration(
                                         color: AppTheme.warningColor,
-                                        borderRadius: BorderRadius.circular(6),
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
                                       child: const Text(
                                         'نفاد قريب',
                                         style: TextStyle(
                                           color: Colors.white,
-                                          fontSize: 10,
+                                          fontSize: 11,
                                           fontWeight: FontWeight.bold,
                                         ),
                                       ),
@@ -445,6 +457,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                 children: [
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.end,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Text(
                                         '${ingredient.costPrice.toStringAsFixed(2)} ج.س',

@@ -376,11 +376,22 @@ class AppProvider extends ChangeNotifier {
     final grossProfit = totalRevenue - cogs;
     final profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0.0;
 
+    // Total Expenses
+    final expenseResult = await _db!.rawQuery(
+      'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date BETWEEN ? AND ?',
+      [startStr, endStr],
+    );
+    final totalExpenses = (expenseResult.first['total'] is num) ? (expenseResult.first['total'] as num).toDouble() : 0.0;
+
+    final netProfit = grossProfit - totalExpenses;
+
     return {
       'totalRevenue': totalRevenue,
       'cogs': cogs,
       'grossProfit': grossProfit,
       'profitMargin': profitMargin,
+      'totalExpenses': totalExpenses,
+      'netProfit': netProfit,
     };
   }
 
@@ -504,9 +515,36 @@ class AppProvider extends ChangeNotifier {
 
   // ==================== RECIPE MANAGEMENT ====================
 
+  Future<double> calculateProductCost(int productId) async {
+    final ingredients = await DatabaseHelper.getProductIngredients(productId);
+    double totalCost = 0;
+    
+    for (var item in ingredients) {
+      // Get the latest cost_price from inventory for each ingredient
+      final ingredientId = item['ingredient_id'] as int;
+      final quantityInRecipe = (item['quantity'] as num).toDouble();
+      
+      final ingredientData = await DatabaseHelper.getIngredientById(ingredientId);
+      if (ingredientData.isNotEmpty) {
+        final currentCostPrice = (ingredientData.first['cost_price'] as num).toDouble();
+        totalCost += quantityInRecipe * currentCostPrice;
+      }
+    }
+    return totalCost;
+  }
+
+  Future<void> updateProductCostFromRecipe(int productId) async {
+    final newCost = await calculateProductCost(productId);
+    await _db!.rawUpdate(
+      'UPDATE products SET cost = ?, updated_at = ? WHERE id = ?',
+      [newCost, DateTime.now().toIso8601String(), productId],
+    );
+    notifyListeners();
+  }
+
   Future<int> addProductIngredient(ProductIngredient link) async {
     final result = await DatabaseHelper.insertProductIngredient(link.toMap());
-    notifyListeners();
+    await updateProductCostFromRecipe(link.productId);
     return result;
   }
 
@@ -516,7 +554,7 @@ class AppProvider extends ChangeNotifier {
 
   Future<int> deleteProductIngredient(int productId, int ingredientId) async {
     final result = await DatabaseHelper.deleteProductIngredient(productId, ingredientId);
-    notifyListeners();
+    await updateProductCostFromRecipe(productId);
     return result;
   }
 }

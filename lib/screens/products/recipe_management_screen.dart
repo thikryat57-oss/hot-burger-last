@@ -17,6 +17,7 @@ class RecipeManagementScreen extends StatefulWidget {
 class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
   List<Map<String, dynamic>> _recipeItems = [];
   List<IngredientModel> _allIngredients = [];
+  double _totalRecipeCost = 0;
   bool _isLoading = true;
 
   @override
@@ -29,10 +30,27 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
     final appProvider = context.read<AppProvider>();
     final ingredients = await appProvider.getIngredients();
     final recipeItems = await appProvider.getProductIngredients(widget.product.id!);
+    
+    // Calculate total cost locally for immediate UI update
+    double totalCost = 0;
+    for (var item in recipeItems) {
+      final ingredientId = item['ingredient_id'] as int;
+      final qty = (item['quantity'] as num).toDouble();
+      
+      // Find the ingredient to get its cost_price
+      try {
+        final ing = ingredients.firstWhere((i) => i.id == ingredientId);
+        totalCost += qty * ing.costPrice;
+      } catch (_) {
+        // Ingredient not found in the list, skip or handle
+      }
+    }
+
     if (mounted) {
       setState(() {
         _allIngredients = ingredients;
         _recipeItems = recipeItems;
+        _totalRecipeCost = totalCost;
         _isLoading = false;
       });
     }
@@ -267,18 +285,48 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'وصفة ${widget.product.name}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                              color: AppTheme.primaryColor,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '${_recipeItems.length} مادة خام',
-                            style: TextStyle(color: AppTheme.textSecondary),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'وصفة ${widget.product.name}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: AppTheme.primaryColor,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${_recipeItems.length} مادة خام',
+                                    style: TextStyle(color: AppTheme.textSecondary),
+                                  ),
+                                ],
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  const Text(
+                                    'إجمالي التكلفة',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: AppTheme.textSecondary,
+                                    ),
+                                  ),
+                                  Text(
+                                    '${_totalRecipeCost.toStringAsFixed(2)} ج.س',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                      color: AppTheme.successColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ],
                       ),

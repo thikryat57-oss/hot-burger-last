@@ -522,6 +522,11 @@ class _SalesScreenState extends State<SalesScreen> {
                               children: [
                                 Flexible(
                                   child: ChoiceChip(
+                                    avatar: Icon(
+                                      Icons.money,
+                                      size: 16,
+                                      color: _selectedPaymentMethod == 'cash' ? Colors.white : AppTheme.primaryColor,
+                                    ),
                                     label: const Text('نقداً'),
                                     selected: _selectedPaymentMethod == 'cash',
                                     selectedColor: AppTheme.primaryColor,
@@ -534,9 +539,14 @@ class _SalesScreenState extends State<SalesScreen> {
                                     },
                                   ),
                                 ),
-                                const SizedBox(width: 6),
+                                const SizedBox(width: 8),
                                 Flexible(
                                   child: ChoiceChip(
+                                    avatar: Icon(
+                                      Icons.account_balance,
+                                      size: 16,
+                                      color: _selectedPaymentMethod == 'bank' ? Colors.white : AppTheme.primaryColor,
+                                    ),
                                     label: const Text('تحويل بنكي'),
                                     selected: _selectedPaymentMethod == 'bank',
                                     selectedColor: AppTheme.primaryColor,
@@ -546,21 +556,6 @@ class _SalesScreenState extends State<SalesScreen> {
                                     ),
                                     onSelected: (selected) {
                                       if (selected) setState(() => _selectedPaymentMethod = 'bank');
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Flexible(
-                                  child: ChoiceChip(
-                                    label: const Text('بطاقة'),
-                                    selected: _selectedPaymentMethod == 'card',
-                                    selectedColor: AppTheme.primaryColor,
-                                    labelStyle: TextStyle(
-                                      color: _selectedPaymentMethod == 'card' ? Colors.white : AppTheme.textSecondary,
-                                      fontSize: 12,
-                                    ),
-                                    onSelected: (selected) {
-                                      if (selected) setState(() => _selectedPaymentMethod = 'card');
                                     },
                                   ),
                                 ),

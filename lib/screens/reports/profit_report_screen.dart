@@ -338,6 +338,82 @@ class _ProfitReportScreenState extends State<ProfitReportScreen> {
                           ),
                         ),
                       ),
+                      const SizedBox(height: 12),
+
+                      // Expenses Card
+                      Card(
+                        color: Colors.purple.shade50,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: Colors.purple.shade200),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Icon(Icons.payments_outlined, color: Colors.purple.shade700, size: 30),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('المصروفات', style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+                                    Text(
+                                      '${fmt.format(_summary['totalExpenses'] ?? 0)} ج.س',
+                                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.purple.shade700),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Net Profit Card
+                      Card(
+                        color: ((_summary['netProfit'] ?? 0) as num >= 0)
+                            ? Colors.teal.shade50
+                            : Colors.red.shade50,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: ((_summary['netProfit'] ?? 0) as num >= 0)
+                                ? Colors.teal.shade200
+                                : Colors.red.shade200,
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              Icon(
+                                ((_summary['netProfit'] ?? 0) as num >= 0) ? Icons.account_balance_wallet : Icons.warning_amber_rounded,
+                                color: ((_summary['netProfit'] ?? 0) as num >= 0) ? Colors.teal.shade700 : Colors.red.shade700,
+                                size: 30,
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text('الصافي', style: TextStyle(fontSize: 13, color: AppTheme.textSecondary)),
+                                    Text(
+                                      '${fmt.format(_summary['netProfit'] ?? 0)} ج.س',
+                                      style: TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: ((_summary['netProfit'] ?? 0) as num >= 0) ? Colors.teal.shade700 : Colors.red.shade700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
                   ),
           ),
