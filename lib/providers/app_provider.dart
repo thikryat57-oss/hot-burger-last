@@ -501,7 +501,6 @@ class AppProvider extends ChangeNotifier {
   Future<List<Map<String, dynamic>>> getSupplierLedger(int supplierId) async {
     return await DatabaseHelper.getSupplierLedger(supplierId);
   }
-}
 
   // ==================== RECIPE MANAGEMENT ====================
 
