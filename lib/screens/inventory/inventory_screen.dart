@@ -186,8 +186,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               ElevatedButton(
                 onPressed: () async {
                   if (nameController.text.isEmpty) return;
-                  final provider = Provider.of<AppProvider>(dialogContext, listen: false);
-                  await provider.updateIngredient(IngredientModel(
+                  await context.read<AppProvider>().updateIngredient(IngredientModel(
                     id: ingredient.id,
                     name: nameController.text,
                     quantity: double.tryParse(quantityController.text) ?? 0,
@@ -197,7 +196,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                   ));
                   if (mounted) {
                     Navigator.pop(dialogContext);
-                    await _loadData();
+                    _loadData();
                   }
                 },
                 child: const Text('حفظ'),

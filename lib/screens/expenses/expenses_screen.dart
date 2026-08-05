@@ -306,17 +306,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                                   ),
                                   child: Icon(Icons.receipt_long, color: AppTheme.warningColor),
                                 ),
-                                title: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        expense.name,
-                                        style: const TextStyle(fontWeight: FontWeight.w600),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                  ],
+                                title: Text(
+                                  expense.name,
+                                  style: const TextStyle(fontWeight: FontWeight.w600),
                                 ),
                                 subtitle: Text(
                                   expense.date,

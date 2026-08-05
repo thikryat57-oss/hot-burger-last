@@ -289,11 +289,8 @@ class DatabaseHelper {
 
   static Future<int> updateIngredient(int id, Map<String, dynamic> ingredient) async {
     final db = await database;
-    // Remove id from map to avoid primary key update issues
-    final map = Map<String, dynamic>.from(ingredient);
-    map.remove('id');
-    map['updated_at'] = DateTime.now().toIso8601String();
-    return await db.update('inventory', map, where: 'id = ?', whereArgs: [id]);
+    ingredient['updated_at'] = DateTime.now().toIso8601String();
+    return await db.update('inventory', ingredient, where: 'id = ?', whereArgs: [id]);
   }
 
   static Future<int> deleteIngredient(int id) async {
