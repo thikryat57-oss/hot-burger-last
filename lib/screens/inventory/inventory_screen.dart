@@ -479,6 +479,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
                         },
                       ),
           ),
+          ],
         ),
       ),
       floatingActionButton: FloatingActionButton(
