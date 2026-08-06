@@ -289,6 +289,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       child: InkWell(
                         onTap: () => _showEditProductDialog(product),
                         onLongPress: () => _deleteProduct(product),
@@ -298,58 +300,41 @@ class _ProductsScreenState extends State<ProductsScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Top Row: Icon, Name, and Menu Button
+                              // Top Row: Name and Icon
                               Row(
                                 children: [
+                                  Expanded(
+                                    child: Text(
+                                      product.name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 18,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
                                   Container(
-                                    width: 40,
-                                    height: 40,
+                                    padding: const EdgeInsets.all(8),
                                     decoration: BoxDecoration(
                                       color: AppTheme.primaryColor.withOpacity(0.1),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Icon(Icons.fastfood, color: AppTheme.primaryColor, size: 24),
                                   ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Text(
-                                      product.name,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.restaurant_menu, color: AppTheme.accentColor, size: 22),
-                                    onPressed: () async {
-                                      await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => RecipeManagementScreen(product: product),
-                                        ),
-                                      );
-                                      _loadProducts();
-                                    },
-                                    tooltip: 'إدارة الوصفة',
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                  ),
                                 ],
                               ),
-                              const SizedBox(height: 12),
+                              const Divider(height: 24),
                               // Middle Row: Category and Availability
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Flexible(
+                                  Icon(Icons.category_outlined, size: 16, color: AppTheme.textHint),
+                                  const SizedBox(width: 6),
+                                  Expanded(
                                     child: Text(
-                                      product.categoryName != null
-                                          ? 'التصنيف: ${product.categoryName}'
-                                          : 'بدون تصنيف',
-                                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                                      product.categoryName ?? 'بدون تصنيف',
+                                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 14),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -370,50 +355,75 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                         ),
                                       ),
                                     ),
+                                  const SizedBox(width: 8),
+                                  IconButton(
+                                    icon: const Icon(Icons.restaurant_menu, color: AppTheme.accentColor, size: 22),
+                                    onPressed: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => RecipeManagementScreen(product: product),
+                                        ),
+                                      );
+                                      _loadProducts();
+                                    },
+                                    tooltip: 'إدارة الوصفة',
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                  ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              // Bottom Row: Price, Cost, and Profit
+                              const SizedBox(height: 16),
+                              // Bottom Section: Price, Cost, and Profit
                               Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
-                                  Text(
-                                    '${product.price.toStringAsFixed(2)} ج.س',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: AppTheme.primaryColor,
-                                      fontSize: 15,
-                                    ),
-                                  ),
-                                  const Spacer(),
-                                  Flexible(
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Flexible(
-                                          child: Text(
-                                            'التكلفة: ${product.cost.toStringAsFixed(2)}',
-                                            style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'السعر',
+                                        style: TextStyle(fontSize: 10, color: AppTheme.textHint),
+                                      ),
+                                      Text(
+                                        '${product.price.toStringAsFixed(2)} ج.س',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: AppTheme.primaryColor,
+                                          fontSize: 18,
                                         ),
-                                        const SizedBox(width: 12),
-                                        Flexible(
-                                          child: Text(
-                                            'الربح: ${profit.toStringAsFixed(2)}',
+                                      ),
+                                    ],
+                                  ),
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text(
+                                        'التكلفة: ${product.cost.toStringAsFixed(2)}',
+                                        style: const TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            'الربح: ',
+                                            style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                          ),
+                                          Text(
+                                            profit.toStringAsFixed(2),
                                             style: TextStyle(
-                                              fontSize: 11,
+                                              fontSize: 13,
                                               fontWeight: FontWeight.bold,
                                               color: profit >= 0
                                                   ? AppTheme.successColor
                                                   : AppTheme.errorColor,
                                             ),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                        ),
-                                      ],
-                                    ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
