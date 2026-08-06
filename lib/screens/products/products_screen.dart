@@ -289,110 +289,137 @@ class _ProductsScreenState extends State<ProductsScreen> {
                     
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        leading: Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: AppTheme.primaryColor.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Icon(Icons.fastfood, color: AppTheme.primaryColor),
-                        ),
-                        title: Text(
-                          product.name,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              product.categoryName != null
-                                  ? 'التصنيف: ${product.categoryName}'
-                                  : 'بدون تصنيف',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 4),
-                            // Wrapping the cost/profit row in a LayoutBuilder or just ensuring flexibility
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
+                      child: InkWell(
+                        onTap: () => _showEditProductDialog(product),
+                        onLongPress: () => _deleteProduct(product),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Top Row: Icon, Name, and Menu Button
+                              Row(
                                 children: [
-                                  Text(
-                                    'التكلفة: ${product.cost.toStringAsFixed(2)}',
-                                    style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryColor.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(Icons.fastfood, color: AppTheme.primaryColor, size: 24),
                                   ),
                                   const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      product.name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.restaurant_menu, color: AppTheme.accentColor, size: 22),
+                                    onPressed: () async {
+                                      await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => RecipeManagementScreen(product: product),
+                                        ),
+                                      );
+                                      _loadProducts();
+                                    },
+                                    tooltip: 'إدارة الوصفة',
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              // Middle Row: Category and Availability
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      product.categoryName != null
+                                          ? 'التصنيف: ${product.categoryName}'
+                                          : 'بدون تصنيف',
+                                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (product.isAvailable)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.successColor.withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        'متاح',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          color: AppTheme.successColor,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              // Bottom Row: Price, Cost, and Profit
+                              Row(
+                                children: [
                                   Text(
-                                    'الربح: ${profit.toStringAsFixed(2)}',
+                                    '${product.price.toStringAsFixed(2)} ج.س',
                                     style: TextStyle(
-                                      fontSize: 11,
                                       fontWeight: FontWeight.bold,
-                                      color: profit >= 0
-                                          ? AppTheme.successColor
-                                          : AppTheme.errorColor,
+                                      color: AppTheme.primaryColor,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Flexible(
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            'التكلفة: ${product.cost.toStringAsFixed(2)}',
+                                            style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Flexible(
+                                          child: Text(
+                                            'الربح: ${profit.toStringAsFixed(2)}',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                              color: profit >= 0
+                                                  ? AppTheme.successColor
+                                                  : AppTheme.errorColor,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.restaurant_menu, color: AppTheme.accentColor, size: 22),
-                              onPressed: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => RecipeManagementScreen(product: product),
-                                  ),
-                                );
-                                _loadProducts(); // Reload to update cost
-                              },
-                              tooltip: 'إدارة الوصفة',
-                            ),
-                            const SizedBox(width: 4),
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  '${product.price.toStringAsFixed(2)} ج.س',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    color: AppTheme.primaryColor,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                if (product.isAvailable)
-                                  Container(
-                                    margin: const EdgeInsets.only(top: 4),
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: AppTheme.successColor.withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      'متاح',
-                                      style: TextStyle(
-                                        fontSize: 10,
-                                        color: AppTheme.successColor,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        onTap: () => _showEditProductDialog(product),
-                        onLongPress: () => _deleteProduct(product),
                       ),
                     );
                   },
