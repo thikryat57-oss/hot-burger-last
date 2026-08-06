@@ -285,6 +285,8 @@ class _ProductsScreenState extends State<ProductsScreen> {
                   itemCount: _products.length,
                   itemBuilder: (context, index) {
                     final product = _products[index];
+                    final profit = product.price - product.cost;
+                    
                     return Card(
                       margin: const EdgeInsets.only(bottom: 12),
                       child: ListTile(
@@ -301,32 +303,42 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         title: Text(
                           product.name,
                           style: const TextStyle(fontWeight: FontWeight.w600),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(product.categoryName != null
-                                ? 'التصنيف: ${product.categoryName}'
-                                : 'بدون تصنيف'),
+                            Text(
+                              product.categoryName != null
+                                  ? 'التصنيف: ${product.categoryName}'
+                                  : 'بدون تصنيف',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                             const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Text(
-                                  'التكلفة: ${product.cost.toStringAsFixed(2)}',
-                                  style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  'الربح: ${(product.price - product.cost).toStringAsFixed(2)}',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: (product.price - product.cost) >= 0
-                                        ? AppTheme.successColor
-                                        : AppTheme.errorColor,
+                            // Wrapping the cost/profit row in a LayoutBuilder or just ensuring flexibility
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  Text(
+                                    'التكلفة: ${product.cost.toStringAsFixed(2)}',
+                                    style: const TextStyle(fontSize: 11, color: AppTheme.textSecondary),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(width: 12),
+                                  Text(
+                                    'الربح: ${profit.toStringAsFixed(2)}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: profit >= 0
+                                          ? AppTheme.successColor
+                                          : AppTheme.errorColor,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ],
                         ),
@@ -346,6 +358,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                               },
                               tooltip: 'إدارة الوصفة',
                             ),
+                            const SizedBox(width: 4),
                             Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.end,
@@ -355,6 +368,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     color: AppTheme.primaryColor,
+                                    fontSize: 13,
                                   ),
                                 ),
                                 if (product.isAvailable)
