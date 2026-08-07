@@ -422,6 +422,8 @@ class AppProvider extends ChangeNotifier {
   Future<int> updateIngredient(IngredientModel ingredient) async {
     final result = await DatabaseHelper.updateIngredient(ingredient.id!, ingredient.toMap());
     notifyListeners();
+    // Auto recalculate costs of products affected by this ingredient's price change
+    await updateAffectedProductsCost(ingredient.id!);
     return result;
   }
 
@@ -447,6 +449,8 @@ class AppProvider extends ChangeNotifier {
         'cost_price': newCost,
       });
       notifyListeners();
+      // Auto recalculate costs of products affected by this ingredient's price change
+      await updateAffectedProductsCost(ingredientId);
     }
   }
 
@@ -488,6 +492,11 @@ class AppProvider extends ChangeNotifier {
       items.map((e) => e.toMap()).toList(),
     );
     notifyListeners();
+    // Auto recalculate costs of products affected by purchased ingredients' new cost_price
+    final uniqueIngredients = items.map((e) => e.ingredientId).toSet();
+    for (final ingredientId in uniqueIngredients) {
+      await updateAffectedProductsCost(ingredientId);
+    }
     return result;
   }
 
@@ -511,6 +520,14 @@ class AppProvider extends ChangeNotifier {
 
   Future<List<Map<String, dynamic>>> getSupplierLedger(int supplierId) async {
     return await DatabaseHelper.getSupplierLedger(supplierId);
+  }
+
+  /// Centralized recalculation: update cost of products affected by an ingredient price change only
+  Future<void> updateAffectedProductsCost(int ingredientId) async {
+    final affectedProductIds = await DatabaseHelper.getProductIdsByIngredient(ingredientId);
+    for (final productId in affectedProductIds) {
+      await updateProductCostFromRecipe(productId);
+    }
   }
 
   // ==================== RECIPE MANAGEMENT ====================

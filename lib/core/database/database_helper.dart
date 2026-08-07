@@ -337,6 +337,18 @@ class DatabaseHelper {
     );
   }
 
+  /// Get IDs of products that use a specific ingredient (for auto cost recalculation)
+  static Future<List<int>> getProductIdsByIngredient(int ingredientId) async {
+    final db = await database;
+    final results = await db.query(
+      'product_ingredients',
+      columns: ['product_id'],
+      where: 'ingredient_id = ?',
+      whereArgs: [ingredientId],
+    );
+    return results.map((r) => r['product_id'] as int).toList();
+  }
+
   static Future<int> deleteProductIngredient(int productId, int ingredientId) async {
     final db = await database;
     return await db.delete(
@@ -464,6 +476,34 @@ class DatabaseHelper {
 
       return invoiceId;
     });
+  }
+
+  /// Recalculate product costs for all products using the given ingredient (called after a purchase updates cost_price)
+  static Future<void> recalculateProductCostsForIngredient(int ingredientId) async {
+    final productIds = await getProductIdsByIngredient(ingredientId);
+    final db = await database;
+    for (final productId in productIds) {
+      // Calculate new cost: sum of (quantity × current cost_price) from product_ingredients
+      final links = await db.query(
+        'product_ingredients',
+        columns: ['ingredient_id', 'quantity'],
+        where: 'product_id = ?',
+        whereArgs: [productId],
+      );
+      double newCost = 0;
+      for (final link in links) {
+        final ingId = link['ingredient_id'] as int;
+        final qty = (link['quantity'] as num).toDouble();
+        final ingData = await db.query('inventory', columns: ['cost_price'], where: 'id = ?', whereArgs: [ingId]);
+        if (ingData.isNotEmpty) {
+          newCost += qty * (ingData.first['cost_price'] as num).toDouble();
+        }
+      }
+      await db.rawUpdate(
+        'UPDATE products SET cost = ?, updated_at = ? WHERE id = ?',
+        [newCost, DateTime.now().toIso8601String(), productId],
+      );
+    }
   }
 
   static Future<List<Map<String, dynamic>>> getPurchaseInvoices({int? supplierId}) async {
