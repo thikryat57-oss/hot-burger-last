@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
@@ -21,7 +22,7 @@ class PdfHelper {
 
   /// Generate a thermal receipt PDF (80mm width)
   static pw.Document _buildReceipt(Invoice invoice) {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: _arabicFont, bold: _arabicBoldFont));
     final fmt = NumberFormat('#,##0.00');
 
     pdf.addPage(
@@ -217,8 +218,18 @@ class PdfHelper {
     return pdf;
   }
 
+  // الخطوط العربية (تُحمّل مرة واحدة عبر rootBundle)
+  static pw.Font? _arabicFont;
+  static pw.Font? _arabicBoldFont;
+
+  static Future<void> _loadArabicFonts() async {
+    _arabicFont ??= pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSansArabic-Regular.ttf'));
+    _arabicBoldFont ??= pw.Font.ttf(await rootBundle.load('assets/fonts/NotoSansArabic-Bold.ttf'));
+  }
+
   /// Print or preview the invoice
   static Future<void> printInvoice(Invoice invoice) async {
+    await _loadArabicFonts();
     final pdf = _buildReceipt(invoice);
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
@@ -228,7 +239,7 @@ class PdfHelper {
 
   /// Generate a thermal shift report PDF (80mm width)
   static pw.Document _buildShiftReport(Map<String, dynamic> summary, {DateTime? startDate, DateTime? endDate}) {
-    final pdf = pw.Document();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: _arabicFont, bold: _arabicBoldFont));
     final fmt = NumberFormat('#,##0.00');
     final start = startDate ?? DateTime.now();
     final end = endDate ?? DateTime.now();
@@ -327,6 +338,7 @@ class PdfHelper {
 
   /// Print shift report
   static Future<void> printShiftReport(Map<String, dynamic> summary, {DateTime? startDate, DateTime? endDate}) async {
+    await _loadArabicFonts();
     final pdf = _buildShiftReport(summary, startDate: startDate, endDate: endDate);
     await Printing.layoutPdf(
       onLayout: (PdfPageFormat format) async => pdf.save(),
