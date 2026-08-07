@@ -295,44 +295,78 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                             final expense = _expenses[index];
                             return Card(
                               margin: const EdgeInsets.only(bottom: 8),
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                leading: Container(
-                                  width: 45,
-                                  height: 45,
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.warningColor.withOpacity(0.1),
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Icon(Icons.receipt_long, color: AppTheme.warningColor),
-                                ),
-                                title: Text(
-                                  expense.name,
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                                subtitle: Text(
-                                  expense.date,
-                                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 12),
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    Text(
-                                      '${expense.amount.toStringAsFixed(2)} ج.س',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: AppTheme.warningColor,
-                                      ),
+                                    // السطر العلوي: اسم المصروف + التاريخ
+                                    Row(
+                                      children: [
+                                        Container(
+                                          width: 40,
+                                          height: 40,
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.warningColor.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(10),
+                                          ),
+                                          child: Icon(Icons.receipt_long, color: AppTheme.warningColor, size: 20),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Text(
+                                            expense.name,
+                                            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            expense.date,
+                                            style: TextStyle(
+                                              color: AppTheme.textSecondary,
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: Icon(Icons.edit, color: AppTheme.textSecondary, size: 20),
-                                      onPressed: () => _showEditExpenseDialog(expense),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    IconButton(
-                                      icon: Icon(Icons.delete_outline, color: AppTheme.errorColor, size: 20),
-                                      onPressed: () => _deleteExpense(expense),
+                                    const SizedBox(height: 6),
+                                    // السطر السفلي: المبلغ + أيقونتي تعديل/حذف
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          '${expense.amount.toStringAsFixed(2)} ج.س',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: AppTheme.warningColor,
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              padding: const EdgeInsets.all(4),
+                                              constraints: const BoxConstraints(),
+                                              icon: Icon(Icons.edit, color: AppTheme.textSecondary, size: 18),
+                                              onPressed: () => _showEditExpenseDialog(expense),
+                                              tooltip: 'تعديل',
+                                            ),
+                                            const SizedBox(width: 6),
+                                            IconButton(
+                                              padding: const EdgeInsets.all(4),
+                                              constraints: const BoxConstraints(),
+                                              icon: Icon(Icons.delete_outline, color: AppTheme.errorColor, size: 18),
+                                              onPressed: () => _deleteExpense(expense),
+                                              tooltip: 'حذف',
+                                            ),
+                                          ],
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
