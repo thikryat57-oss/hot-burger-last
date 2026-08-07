@@ -324,6 +324,17 @@ class PdfHelper {
 
               pw.SizedBox(height: 6),
               pw.Divider(),
+
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('صافي الربح:', style: pw.TextStyle(fontSize: 9)),
+                  pw.Text('${fmt.format(summary['grossProfitFromSnapshot'] ?? 0)} ج.س', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                ],
+              ),
+
+              pw.SizedBox(height: 6),
+              pw.Divider(),
               pw.SizedBox(height: 4),
               pw.Text('شكراً لزيارتكم', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
               pw.SizedBox(height: 2),

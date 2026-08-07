@@ -144,6 +144,10 @@ class AppProvider extends ChangeNotifier {
     });
 
     for (var item in items) {
+      // Cost Snapshot: freeze product cost at the moment of sale
+      final productCostAtSale = await calculateProductCost(item.productId);
+      final unitProfit = item.price - productCostAtSale;
+      final totalProfit = unitProfit * item.quantity;
       await _db!.insert('invoice_items', {
         'invoice_id': invoiceId,
         'product_id': item.productId,
@@ -151,6 +155,9 @@ class AppProvider extends ChangeNotifier {
         'quantity': item.quantity,
         'price': item.price,
         'total': item.total,
+        'cost_snapshot': productCostAtSale,
+        'unit_profit': unitProfit,
+        'total_profit': totalProfit,
       });
     }
 
@@ -362,16 +369,29 @@ class AppProvider extends ChangeNotifier {
     );
     final totalRevenue = (revenueResult.first['total'] is num) ? (revenueResult.first['total'] as num).toDouble() : 0.0;
 
-    // COGS: sum of (invoice_items.quantity * product_ingredients.quantity * inventory.cost_price)
+    // COGS: based on frozen cost_snapshot at time of sale (historical data never changes)
+    // Fallback: older invoices (before snapshot existed) fall back to current cost calculation
     final cogsResult = await _db!.rawQuery('''
-      SELECT COALESCE(SUM(ii.quantity * pi.quantity * inv.cost_price), 0) as cogs
+      SELECT COALESCE(
+        SUM(
+          CASE WHEN ii.cost_snapshot > 0
+            THEN ii.quantity * ii.cost_snapshot
+            ELSE ii.quantity * (
+              SELECT COALESCE(SUM(pi.quantity * inv.cost_price), 0)
+              FROM product_ingredients pi
+              INNER JOIN inventory inv ON pi.ingredient_id = inv.id
+              WHERE pi.product_id = ii.product_id
+            )
+          END
+        ), 0
+      ) as cogs,
+      COALESCE(SUM(ii.total_profit), 0) as total_profit
       FROM invoice_items ii
       INNER JOIN invoices inv_t ON ii.invoice_id = inv_t.id
-      INNER JOIN product_ingredients pi ON ii.product_id = pi.product_id
-      INNER JOIN inventory inv ON pi.ingredient_id = inv.id
       WHERE DATE(inv_t.created_at) BETWEEN ? AND ?
     ''', [startStr, endStr]);
     final cogs = (cogsResult.first['cogs'] is num) ? (cogsResult.first['cogs'] as num).toDouble() : 0.0;
+    final grossProfitFromItems = (cogsResult.first['total_profit'] is num) ? (cogsResult.first['total_profit'] as num).toDouble() : 0.0;
 
     final grossProfit = totalRevenue - cogs;
     final profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0.0;
@@ -389,6 +409,7 @@ class AppProvider extends ChangeNotifier {
       'totalRevenue': totalRevenue,
       'cogs': cogs,
       'grossProfit': grossProfit,
+      'grossProfitFromSnapshot': grossProfitFromItems,
       'profitMargin': profitMargin,
       'totalExpenses': totalExpenses,
       'netProfit': netProfit,

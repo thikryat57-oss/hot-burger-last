@@ -130,6 +130,9 @@ class DatabaseHelper {
         quantity INTEGER NOT NULL DEFAULT 1,
         price REAL NOT NULL DEFAULT 0,
         total REAL NOT NULL DEFAULT 0,
+        cost_snapshot REAL NOT NULL DEFAULT 0,
+        unit_profit REAL NOT NULL DEFAULT 0,
+        total_profit REAL NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
       )
@@ -258,6 +261,13 @@ class DatabaseHelper {
     // Migration from v3 to v4: Add purchases and suppliers
     if (oldVersion < 4) {
       await _createVersion4Tables(db);
+    }
+
+    // Migration from v4 to v5: Add cost snapshot columns to invoice_items
+    if (oldVersion < 5) {
+      await db.execute('ALTER TABLE invoice_items ADD COLUMN cost_snapshot REAL NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE invoice_items ADD COLUMN unit_profit REAL NOT NULL DEFAULT 0');
+      await db.execute('ALTER TABLE invoice_items ADD COLUMN total_profit REAL NOT NULL DEFAULT 0');
     }
   }
 

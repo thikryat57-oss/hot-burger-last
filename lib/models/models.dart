@@ -243,6 +243,9 @@ class InvoiceItem {
   final int quantity;
   final double price;
   final double total;
+  final double costSnapshot;
+  final double unitProfit;
+  final double totalProfit;
 
   InvoiceItem({
     this.id,
@@ -252,6 +255,9 @@ class InvoiceItem {
     required this.quantity,
     required this.price,
     required this.total,
+    this.costSnapshot = 0,
+    this.unitProfit = 0,
+    this.totalProfit = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -263,6 +269,9 @@ class InvoiceItem {
       'quantity': quantity,
       'price': price,
       'total': total,
+      'cost_snapshot': costSnapshot,
+      'unit_profit': unitProfit,
+      'total_profit': totalProfit,
     };
   }
 
@@ -275,6 +284,9 @@ class InvoiceItem {
       quantity: map['quantity'],
       price: map['price']?.toDouble() ?? 0,
       total: map['total']?.toDouble() ?? 0,
+      costSnapshot: map['cost_snapshot']?.toDouble() ?? 0,
+      unitProfit: map['unit_profit']?.toDouble() ?? 0,
+      totalProfit: map['total_profit']?.toDouble() ?? 0,
     );
   }
 }
