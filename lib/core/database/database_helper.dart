@@ -269,6 +269,108 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE invoice_items ADD COLUMN unit_profit REAL NOT NULL DEFAULT 0');
       await db.execute('ALTER TABLE invoice_items ADD COLUMN total_profit REAL NOT NULL DEFAULT 0');
     }
+
+    // Migration from v5 to v6: Add inventory audit trail table
+    if (oldVersion < 6) {
+      await _createVersion6Tables(db);
+    }
+  }
+
+  // Creates v6 tables: inventory audit trail log
+  static Future<void> _createVersion6Tables(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS inventory_audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action_date TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
+        action_type TEXT NOT NULL,
+        ingredient_id INTEGER,
+        ingredient_name TEXT,
+        quantity_before REAL NOT NULL DEFAULT 0,
+        quantity_change REAL NOT NULL DEFAULT 0,
+        quantity_after REAL NOT NULL DEFAULT 0,
+        cost_price_at_action REAL NOT NULL DEFAULT 0,
+        reference_type TEXT,
+        reference_id INTEGER,
+        note TEXT
+      )
+    ''');
+  }
+
+  // ==================== INVENTORY AUDIT TRAIL ====================
+
+  // Central audit logging: every inventory movement goes through this function
+  static Future<void> logInventoryAudit({
+    required String actionType,
+    int? ingredientId,
+    String? ingredientName,
+    required double quantityBefore,
+    required double quantityChange,
+    required double quantityAfter,
+    required double costPriceAtAction,
+    String? referenceType,
+    int? referenceId,
+    String? note,
+  }) async {
+    final db = await database;
+    await db.insert('inventory_audit_log', {
+      'action_date': DateTime.now().toIso8601String(),
+      'action_type': actionType,
+      'ingredient_id': ingredientId,
+      'ingredient_name': ingredientName,
+      'quantity_before': quantityBefore,
+      'quantity_change': quantityChange,
+      'quantity_after': quantityAfter,
+      'cost_price_at_action': costPriceAtAction,
+      'reference_type': referenceType,
+      'reference_id': referenceId,
+      'note': note,
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> getInventoryAuditLogs({
+    String? query,
+    String? actionType,
+    int? ingredientId,
+    String? dateFrom,
+    String? dateTo,
+  }) async {
+    final db = await database;
+    final whereClauses = <String>[];
+    final args = <dynamic>[];
+    if (query != null && query.isNotEmpty) {
+      whereClauses.add('(ingredient_name LIKE ? OR action_type LIKE ? OR note LIKE ?)');
+      args.addAll(['%$query%', '%$query%', '%$query%']);
+    }
+    if (actionType != null) {
+      whereClauses.add('action_type = ?');
+      args.add(actionType);
+    }
+    if (ingredientId != null) {
+      whereClauses.add('ingredient_id = ?');
+      args.add(ingredientId);
+    }
+    if (dateFrom != null) {
+      whereClauses.add('action_date >= ?');
+      args.add(dateFrom);
+    }
+    if (dateTo != null) {
+      whereClauses.add('action_date <= ?');
+      args.add('$dateTo 23:59:59');
+    }
+    final where = whereClauses.isEmpty ? null : whereClauses.join(' AND ');
+    final results = await db.query(
+      'inventory_audit_log',
+      where: where,
+      whereArgs: args,
+      orderBy: 'action_date DESC',
+    );
+    return results;
+  }
+
+  static Future<int> getInventoryAuditLogCount() async {
+    final db = await database;
+    final result = await db.rawQuery('SELECT COUNT(*) as count FROM inventory_audit_log');
+    return (result.first['count'] as num).toInt();
   }
 
   // ==================== INVENTORY CRUD ====================
@@ -308,12 +410,46 @@ class DatabaseHelper {
     return await db.delete('inventory', where: 'id = ?', whereArgs: [id]);
   }
 
-  static Future<int> updateIngredientQuantity(int id, double delta) async {
+  /// Update ingredient quantity and atomically log the movement in the audit trail.
+  /// Every quantity change (sale deduction, purchase, manual adjust, restoration)
+  /// goes through this function so no movement is ever recorded without a reason.
+  static Future<int> updateIngredientQuantity(
+    int id, {
+    required double delta,
+    required String actionType,
+    int? referenceId,
+    String? referenceType,
+    String? note,
+  }) async {
     final db = await database;
-    return await db.rawUpdate(
+    // 1. Read current state
+    final current = await db.query('inventory',
+        columns: ['quantity', 'cost_price', 'name'], where: 'id = ?', whereArgs: [id]);
+    final beforeQty = current.isNotEmpty ? (current.first['quantity'] as num).toDouble() : 0;
+    final costPrice = current.isNotEmpty ? (current.first['cost_price'] as num).toDouble() : 0;
+    final name = current.isNotEmpty ? current.first['name'] as String? : null;
+
+    // 2. Apply the change
+    final result = await db.rawUpdate(
       'UPDATE inventory SET quantity = quantity + ?, updated_at = ? WHERE id = ?',
       [delta, DateTime.now().toIso8601String(), id],
     );
+
+    // 3. Log the movement together with the update (single unit of work)
+    await db.insert('inventory_audit_log', {
+      'action_date': DateTime.now().toIso8601String(),
+      'action_type': actionType,
+      'ingredient_id': id,
+      'ingredient_name': name,
+      'quantity_before': beforeQty,
+      'quantity_change': delta,
+      'quantity_after': beforeQty + delta,
+      'cost_price_at_action': costPrice,
+      'reference_type': referenceType,
+      'reference_id': referenceId,
+      'note': note,
+    });
+    return result;
   }
 
   // ==================== PRODUCT-INGREDIENTS (RECIPE) CRUD ====================
@@ -377,15 +513,20 @@ class DatabaseHelper {
     );
   }
 
-  // Deduct ingredients when a product is sold
-  static Future<void> deductProductIngredients(int productId, int soldQuantity) async {
-    final db = await database;
+  // Deduct ingredients when a product is sold (logged as 'sale' movement)
+  static Future<void> deductProductIngredients(int productId, int soldQuantity, {int? invoiceId}) async {
     final links = await getProductIngredients(productId);
     for (final link in links) {
       final ingredientId = link['ingredient_id'] as int;
       final perUnit = (link['quantity'] as num).toDouble();
       final totalDeduct = perUnit * soldQuantity;
-      await updateIngredientQuantity(ingredientId, -totalDeduct);
+      await updateIngredientQuantity(
+        ingredientId,
+        delta: -totalDeduct,
+        actionType: 'sale',
+        referenceType: 'invoice',
+        referenceId: invoiceId,
+      );
     }
   }
 
@@ -465,6 +606,19 @@ class DatabaseHelper {
             'UPDATE inventory SET quantity = quantity + ?, cost_price = ?, updated_at = ? WHERE id = ?',
             [newQty, averageCost, DateTime.now().toIso8601String(), ingredientId],
           );
+
+          // Audit trail: log the purchase movement inside the transaction (atomic unit)
+          await txn.insert('inventory_audit_log', {
+            'action_date': DateTime.now().toIso8601String(),
+            'action_type': 'purchase',
+            'ingredient_id': ingredientId,
+            'quantity_before': oldQty,
+            'quantity_change': newQty,
+            'quantity_after': oldQty + newQty,
+            'cost_price_at_action': averageCost,
+            'reference_type': 'purchase_invoice',
+            'reference_id': invoiceId,
+          });
         }
 
         // Insert Purchase Item

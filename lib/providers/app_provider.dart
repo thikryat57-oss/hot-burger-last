@@ -161,11 +161,17 @@ class AppProvider extends ChangeNotifier {
       });
     }
 
-    // Step 4: Deduct raw materials from inventory
+    // Step 4: Deduct raw materials from inventory (logged as 'sale' movement)
     for (var entry in requiredIngredients.entries) {
       final ingredientId = entry.key;
       final needed = entry.value;
-      await DatabaseHelper.updateIngredientQuantity(ingredientId, -needed);
+      await DatabaseHelper.updateIngredientQuantity(
+        ingredientId,
+        delta: -needed,
+        actionType: 'sale',
+        referenceType: 'invoice',
+        referenceId: invoiceId,
+      );
     }
 
     // Step 5: Check for low stock alerts
@@ -227,7 +233,13 @@ class AppProvider extends ChangeNotifier {
       for (var link in links) {
         final ingredientId = link['ingredient_id'] as int;
         final perUnit = (link['quantity'] as num).toDouble();
-        await DatabaseHelper.updateIngredientQuantity(ingredientId, perUnit * soldQty);
+        await DatabaseHelper.updateIngredientQuantity(
+          ingredientId,
+          delta: perUnit * soldQty,
+          actionType: 'sale_deleted',
+          referenceType: 'invoice',
+          referenceId: id,
+        );
       }
     }
     await _db!.delete('invoice_items', where: 'invoice_id = ?', whereArgs: [id]);
@@ -426,6 +438,18 @@ class AppProvider extends ChangeNotifier {
 
   Future<int> addIngredient(IngredientModel ingredient) async {
     final result = await DatabaseHelper.insertIngredient(ingredient.toMap());
+    // Audit trail: log the new ingredient creation
+    await DatabaseHelper.logInventoryAudit(
+      actionType: 'added',
+      ingredientId: result,
+      ingredientName: ingredient.name,
+      quantityBefore: 0,
+      quantityChange: ingredient.quantity,
+      quantityAfter: ingredient.quantity,
+      costPriceAtAction: ingredient.costPrice,
+      referenceType: 'ingredient',
+      referenceId: result,
+    );
     notifyListeners();
     return result;
   }
@@ -441,6 +465,28 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<int> updateIngredient(IngredientModel ingredient) async {
+    // Audit trail: log quantity and/or price changes before applying them
+    final old = await DatabaseHelper.getIngredientById(ingredient.id!);
+    if (old.isNotEmpty) {
+      final oldQty = (old.first['quantity'] as num).toDouble();
+      final oldCost = (old.first['cost_price'] as num).toDouble();
+      final newQty = ingredient.quantity;
+      final newCost = ingredient.costPrice;
+      final qtyDelta = newQty - oldQty;
+      if (qtyDelta != 0 || newCost != oldCost) {
+        await DatabaseHelper.logInventoryAudit(
+          actionType: qtyDelta != 0 ? 'manual_adjust' : 'price_changed',
+          ingredientId: ingredient.id!,
+          ingredientName: ingredient.name,
+          quantityBefore: oldQty,
+          quantityChange: qtyDelta,
+          quantityAfter: newQty,
+          costPriceAtAction: newCost,
+          referenceType: 'ingredient',
+          referenceId: ingredient.id,
+        );
+      }
+    }
     final result = await DatabaseHelper.updateIngredient(ingredient.id!, ingredient.toMap());
     notifyListeners();
     // Auto recalculate costs of products affected by this ingredient's price change
@@ -465,10 +511,23 @@ class AppProvider extends ChangeNotifier {
         newCost = (oldQty * oldCost + quantity * cost) / (oldQty + quantity);
       }
       
+      final ingredientName = ingredient.first['name'] as String?;
       await DatabaseHelper.updateIngredient(ingredientId, {
         'quantity': oldQty + quantity,
         'cost_price': newCost,
       });
+      // Audit trail: log the purchase movement (increase in stock)
+      await DatabaseHelper.logInventoryAudit(
+        actionType: 'purchase',
+        ingredientId: ingredientId,
+        ingredientName: ingredientName,
+        quantityBefore: oldQty,
+        quantityChange: quantity,
+        quantityAfter: oldQty + quantity,
+        costPriceAtAction: newCost,
+        referenceType: 'purchase',
+        referenceId: null,
+      );
       notifyListeners();
       // Auto recalculate costs of products affected by this ingredient's price change
       await updateAffectedProductsCost(ingredientId);

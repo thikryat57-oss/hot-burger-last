@@ -237,6 +237,79 @@ class PdfHelper {
     );
   }
 
+  /// Generate an inventory audit trail PDF report (reuses the Arabic font system)
+  static Future<void> printInventoryHistoryReport(List<Map<String, dynamic>> logs) async {
+    await _loadArabicFonts();
+    final pdf = pw.Document(theme: pw.ThemeData.withFont(base: _arabicFont, bold: _arabicBoldFont));
+    final fmt = NumberFormat('#,##0.####');
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(10 * PdfPageFormat.mm),
+        build: (pw.Context context) {
+          return [
+            pw.Text('Hot Burger', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+            pw.SizedBox(height: 4),
+            pw.Text('تقرير سجل حركات المخزون', style: pw.TextStyle(fontSize: 13), textAlign: pw.TextAlign.center),
+            pw.SizedBox(height: 4),
+            pw.Text('عدد الحركات: ${logs.length}', textAlign: pw.TextAlign.center),
+            pw.SizedBox(height: 8),
+            pw.Table(
+              border: pw.TableBorder.all(width: 0.5),
+              columnWidths: const {0: pw.FlexColumnWidth(2.5), 1: pw.FlexColumnWidth(1.8), 2: pw.FlexColumnWidth(1.3), 3: pw.FlexColumnWidth(1.3), 4: pw.FlexColumnWidth(1.3), 5: pw.FlexColumnWidth(1.2)},
+              children: [
+                pw.TableRow(
+                  decoration: pw.BoxDecoration(color: PdfColors.grey300),
+                  children: [
+                    pw.Text('المادة', style: pw.TextStyle(fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+                    pw.Text('النوع', style: pw.TextStyle(fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+                    pw.Text('قبل', style: pw.TextStyle(fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+                    pw.Text('التغيير', style: pw.TextStyle(fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+                    pw.Text('بعد', style: pw.TextStyle(fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+                    pw.Text('التاريخ', style: pw.TextStyle(fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+                  ],
+                ),
+                ...logs.map((log) {
+                  final change = (log['quantity_change'] as num).toDouble();
+                  final date = DateTime.parse(log['action_date'] as String);
+                  return pw.TableRow(
+                    children: [
+                      pw.Text((log['ingredient_name'] as String?) ?? '-', textAlign: pw.TextAlign.center),
+                      pw.Text(_arabicActionLabel(log['action_type'] as String), textAlign: pw.TextAlign.center),
+                      pw.Text(fmt.format((log['quantity_before'] as num).toDouble()), textAlign: pw.TextAlign.center),
+                      pw.Text('${change >= 0 ? '+' : ''}${fmt.format(change)}', textAlign: pw.TextAlign.center),
+                      pw.Text(fmt.format((log['quantity_after'] as num).toDouble()), textAlign: pw.TextAlign.center),
+                      pw.Text('${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}', textAlign: pw.TextAlign.center),
+                    ],
+                  );
+                }),
+              ],
+            ),
+          ];
+        },
+      ),
+    );
+
+    await Printing.layoutPdf(
+      onLayout: (PdfPageFormat format) async => pdf.save(),
+      name: 'سجل_حركات_المخزون_${DateTime.now().year}${DateTime.now().month.toString().padLeft(2, '0')}${DateTime.now().day.toString().padLeft(2, '0')}.pdf',
+    );
+  }
+
+  static String _arabicActionLabel(String action) {
+    const labels = {
+      'added': 'إضافة مادة',
+      'edited': 'تعديل مادة',
+      'manual_adjust': 'تعديل يدوي',
+      'price_changed': 'تعديل السعر',
+      'purchase': 'شراء',
+      'sale': 'بيع',
+      'sale_deleted': 'استرجاع',
+    };
+    return labels[action] ?? action;
+  }
+
   /// Generate a thermal shift report PDF (80mm width)
   static pw.Document _buildShiftReport(Map<String, dynamic> summary, {DateTime? startDate, DateTime? endDate}) {
     final pdf = pw.Document(theme: pw.ThemeData.withFont(base: _arabicFont, bold: _arabicBoldFont));

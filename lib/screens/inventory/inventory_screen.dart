@@ -3,15 +3,38 @@ import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
+import 'inventory_history_screen.dart';
 
-class InventoryScreen extends StatefulWidget {
+class InventoryScreen extends StatelessWidget {
   const InventoryScreen({super.key});
 
   @override
-  State<InventoryScreen> createState() => _InventoryScreenState();
+  Widget build(BuildContext context) {
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        children: [
+          const TabBar(
+            tabs: [
+              Tab(text: 'المخزون', icon: Icon(Icons.inventory_2)),
+              Tab(text: 'سجل الحركات', icon: Icon(Icons.history)),
+            ],
+          ),
+          const Expanded(child: TabBarView(children: [_InventoryList(), InventoryHistoryScreen()])),
+        ],
+      ),
+    );
+  }
 }
 
-class _InventoryScreenState extends State<InventoryScreen> {
+class _InventoryList extends StatefulWidget {
+  const _InventoryList();
+
+  @override
+  State<_InventoryList> createState() => _InventoryScreenState();
+}
+
+class _InventoryScreenState extends State<_InventoryList> {
   List<IngredientModel> _ingredients = [];
   List<IngredientModel> _lowStock = [];
   bool _isLoading = true;
