@@ -428,6 +428,12 @@ class AppProvider extends ChangeNotifier {
     };
   }
 
+  // Generic read-only query (for analytics reuse)
+  Future<List<Map<String, dynamic>>> rawQuery(String sql, [List<dynamic>? args]) async {
+    _db ??= await DatabaseHelper.database;
+    return await _db!.rawQuery(sql, args);
+  }
+
   // Navigation
   void setIndex(int index) {
     _currentIndex = index;
