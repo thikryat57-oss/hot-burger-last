@@ -387,103 +387,127 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                   ? BorderSide(color: AppTheme.warningColor, width: 1)
                                   : BorderSide.none,
                             ),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              leading: Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  color: isLow
-                                      ? AppTheme.warningColor.withOpacity(0.15)
-                                      : AppTheme.accentColor.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Icon(
-                                  isLow ? Icons.warning_amber_rounded : Icons.inventory,
-                                  color: isLow ? AppTheme.warningColor : AppTheme.accentColor,
-                                ),
-                              ),
-                              title: Row(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Expanded(
-                                    child: Text(
-                                      ingredient.name,
-                                      style: const TextStyle(fontWeight: FontWeight.w600),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                  if (isLow)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: AppTheme.warningColor,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: const Text(
-                                        'نفاد قريب',
-                                        style: TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold,
+                                  // السطر العلوي: أيقونة + اسم المادة + شارة نفاد قريب
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: isLow
+                                              ? AppTheme.warningColor.withOpacity(0.15)
+                                              : AppTheme.accentColor.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Icon(
+                                          isLow ? Icons.warning_amber_rounded : Icons.inventory,
+                                          color: isLow ? AppTheme.warningColor : AppTheme.accentColor,
+                                          size: 20,
                                         ),
                                       ),
-                                    ),
-                                ],
-                              ),
-                              subtitle: Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      '${ingredient.quantity} ${ingredient.unit}',
-                                      style: TextStyle(
-                                        color: isLow ? AppTheme.warningColor : AppTheme.primaryColor,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Text(
+                                          ingredient.name,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 15,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Text(
-                                      'الحد: ${ingredient.minQuantity} ${ingredient.unit}',
-                                      style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    mainAxisAlignment: MainAxisAlignment.center,
+                                      const SizedBox(width: 8),
+                                      if (isLow)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                          decoration: BoxDecoration(
+                                            color: AppTheme.warningColor,
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Text(
+                                            'نفاد قريب',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  // السطر الأوسط: الكمية والوحدة + حد التنبيه
+                                  Row(
                                     children: [
-                                      Text(
-                                        '${ingredient.costPrice.toStringAsFixed(2)} ج.س',
-                                        style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                                      Flexible(
+                                        child: Text(
+                                          '${ingredient.quantity} ${ingredient.unit}',
+                                          style: TextStyle(
+                                            color: isLow ? AppTheme.warningColor : AppTheme.primaryColor,
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 13,
+                                          ),
+                                        ),
                                       ),
-                                      Text(
-                                        'التكلفة',
-                                        style: TextStyle(fontSize: 10, color: AppTheme.textHint),
+                                      const SizedBox(width: 12),
+                                      Flexible(
+                                        child: Text(
+                                          'الحد: ${ingredient.minQuantity} ${ingredient.unit}',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: AppTheme.textSecondary,
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    icon: Icon(Icons.shopping_cart, color: AppTheme.successColor, size: 20),
-                                    onPressed: () => _showPurchaseDialog(ingredient),
-                                    tooltip: 'تسجيل شراء',
-                                  ),
-                                  IconButton(
-                                    icon: Icon(Icons.edit, color: AppTheme.textSecondary, size: 20),
-                                    onPressed: () => _showEditIngredientDialog(ingredient),
-                                    tooltip: 'تعديل',
-                                  ),
-                                  IconButton(
-                                    icon: Icon(Icons.delete, color: AppTheme.errorColor, size: 20),
-                                    onPressed: () => _deleteIngredient(ingredient),
-                                    tooltip: 'حذف',
+                                  const SizedBox(height: 6),
+                                  // السطر الأخير: التكلفة + الأزرار الثلاثة
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        '${ingredient.costPrice.toStringAsFixed(2)} ج.س',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                      ),
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            padding: const EdgeInsets.all(4),
+                                            constraints: const BoxConstraints(),
+                                            icon: Icon(Icons.shopping_cart, color: AppTheme.successColor, size: 18),
+                                            onPressed: () => _showPurchaseDialog(ingredient),
+                                            tooltip: 'تسجيل شراء',
+                                          ),
+                                          const SizedBox(width: 6),
+                                          IconButton(
+                                            padding: const EdgeInsets.all(4),
+                                            constraints: const BoxConstraints(),
+                                            icon: Icon(Icons.edit, color: AppTheme.textSecondary, size: 18),
+                                            onPressed: () => _showEditIngredientDialog(ingredient),
+                                            tooltip: 'تعديل',
+                                          ),
+                                          const SizedBox(width: 6),
+                                          IconButton(
+                                            padding: const EdgeInsets.all(4),
+                                            constraints: const BoxConstraints(),
+                                            icon: Icon(Icons.delete, color: AppTheme.errorColor, size: 18),
+                                            onPressed: () => _deleteIngredient(ingredient),
+                                            tooltip: 'حذف',
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                   ),
                                 ],
                               ),
