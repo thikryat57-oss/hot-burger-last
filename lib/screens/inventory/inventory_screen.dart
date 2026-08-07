@@ -58,6 +58,121 @@ class _InventoryScreenState extends State<_InventoryList> {
     }
   }
 
+  // ===== قسم المواد التي تحتاج إلى شراء =====
+  // يعرض المواد التي انخفضت عن الحد الأدنى مع الكمية المقترحة للشراء
+  // الترتيب: نسبة (الحالي ÷ الحد الأدنى) الأصغر أولًا، ثم حسب الاسم
+  Widget _buildPurchaseSuggestions() {
+    // استخدام قائمة المواد الموجودة (من Provider) دون استعلام جديد
+    final suggestions = _ingredients
+        .where((i) => i.minQuantity > 0 && i.quantity < i.minQuantity)
+        .toList()
+      ..sort((a, b) {
+        // نسبة الاحتياج: الأقل أولًا (المواد الأشد حاجة أولًا)
+        final ratioA = a.minQuantity > 0 ? a.quantity / a.minQuantity : 0.0;
+        final ratioB = b.minQuantity > 0 ? b.quantity / b.minQuantity : 0.0;
+        final cmp = ratioA.compareTo(ratioB);
+        return cmp != 0 ? cmp : a.name.compareTo(b.name);
+      });
+
+    if (suggestions.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Text(
+          'لا توجد مواد تحتاج إلى شراء حاليًا.',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, color: AppTheme.textHint),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.shopping_basket, color: AppTheme.warningColor, size: 18),
+              const SizedBox(width: 6),
+              const Text(
+                'المواد التي تحتاج إلى شراء',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              const Spacer(),
+              Text(
+                '${suggestions.length} مادة',
+                style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ...suggestions.map((i) => Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            color: AppTheme.warningColor.withOpacity(0.08),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+              side: BorderSide(color: AppTheme.warningColor.withOpacity(0.5), width: 1),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppTheme.warningColor.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: Icon(Icons.add_shopping_cart, color: AppTheme.warningColor, size: 18),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          i.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'الحالي: ${i.quantity} ${i.unit} · الحد: ${i.minQuantity} ${i.unit}',
+                          style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppTheme.warningColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'يُقترح شراء: ${(i.minQuantity - i.quantity).toStringAsFixed(1)} ${i.unit}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+
   void _showAddIngredientDialog() {
     final nameController = TextEditingController();
     final quantityController = TextEditingController(text: '0');
@@ -539,6 +654,8 @@ class _InventoryScreenState extends State<_InventoryList> {
                         },
                       ),
           ),
+          // المواد التي تحتاج إلى شراء (تحت الحد الأدنى)
+          _buildPurchaseSuggestions(),
           ],
         ),
       ),
