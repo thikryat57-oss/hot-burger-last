@@ -19,6 +19,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   DateTime _customStart = DateTime.now();
   DateTime _customEnd = DateTime.now();
 
+  // Display-only state (filled by provider methods)
   Map<String, dynamic> _summary = {};
   List<Map<String, dynamic>> _dailySales = [];
   List<Map<String, dynamic>> _topSold = [];
@@ -41,6 +42,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Reload when returning from another screen (e.g., after a sale or purchase)
     _loadAll();
   }
+
+  // ---------- Period range (pure UI logic, no DB) ----------
 
   Map<String, DateTime> _getRange() {
     final now = DateTime.now();
@@ -65,6 +68,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // ---------- Data loading (delegated entirely to provider) ----------
+
   Future<void> _loadAll() async {
     final appProvider = context.read<AppProvider>();
     setState(() => _isLoading = true);
@@ -72,76 +77,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final start = range['start']!;
     final end = range['end']!;
 
-    // 1. P&L (single query bundle: revenue, COGS from cost_snapshot, expenses)
-    final summary = await appProvider.getProfitAndLossSummary(startDate: start, endDate: end);
-
-    // 2. Daily sales series (one grouped query, grouped by DATE(created_at))
-    final startStr = DateFormat('yyyy-MM-dd').format(start);
-    final endStr = DateFormat('yyyy-MM-dd').format(end);
-    final dailyResult = await appProvider.rawQuery(
-      'SELECT DATE(created_at) as d, COALESCE(SUM(total_amount),0) as total, COUNT(*) as count '
-      'FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY DATE(created_at) ORDER BY d ASC',
-      [startStr, endStr],
-    );
-    final dailySales = dailyResult
-        .map((e) => <String, dynamic>{
-              'date': e['d'] as String,
-              'total': (e['total'] is num) ? (e['total'] as num).toDouble() : 0.0,
-              'count': (e['count'] is num) ? e['count'] as int : 0,
-            })
-        .toList();
-
-    // 3. Top 5 best-selling products (by quantity sold)
-    final topSoldResult = await appProvider.rawQuery(
-      'SELECT product_name, SUM(quantity) as qty, COALESCE(SUM(total),0) as total '
-      'FROM invoice_items WHERE DATE(created_at) BETWEEN ? AND ? '
-      'GROUP BY product_id ORDER BY qty DESC LIMIT 5',
-      [startStr, endStr],
-    );
-    final topSold = topSoldResult.map((e) => <String, dynamic>{
-          'name': e['product_name'] as String,
-          'qty': (e['qty'] is num) ? (e['qty'] as num).toDouble() : 0.0,
-          'total': (e['total'] is num) ? (e['total'] as num).toDouble() : 0.0,
-        }).toList();
-
-    // 4. Top 5 most profitable products (from saved total_profit)
-    final topProfitResult = await appProvider.rawQuery(
-      'SELECT product_name, SUM(quantity) as qty, COALESCE(SUM(total_profit),0) as profit '
-      'FROM invoice_items WHERE DATE(created_at) BETWEEN ? AND ? '
-      'GROUP BY product_id ORDER BY profit DESC LIMIT 5',
-      [startStr, endStr],
-    );
-    final topProfit = topProfitResult.map((e) => <String, dynamic>{
-          'name': e['product_name'] as String,
-          'qty': (e['qty'] is num) ? (e['qty'] as num).toDouble() : 0.0,
-          'profit': (e['profit'] is num) ? (e['profit'] as num).toDouble() : 0.0,
-        }).toList();
-
-    // 5. Expenses by category (uses the product/category name embedded in expense.name)
-    final expenses = await appProvider.getExpenses();
-    final byCat = <String, double>{};
-    for (final exp in expenses) {
-      final d = DateTime.tryParse(exp.date);
-      if (d != null && d.isAfter(start.subtract(const Duration(seconds: 1))) && d.isBefore(end.add(const Duration(seconds: 1)))) {
-        byCat[exp.name] = (byCat[exp.name] ?? 0) + exp.amount;
-      }
-    }
-    final expensesByCategory = byCat.entries
-        .map((e) => <String, dynamic>{'name': e.key, 'amount': e.value})
-        .toList()
-      ..sort((a, b) => (b['amount'] as double).compareTo(a['amount'] as double));
-
-    // 6. Low stock count (reuse existing min_quantity logic)
-    final lowStock = await appProvider.getLowStockIngredients();
+    // All data comes from provider (read-only analytics methods)
+    final results = await Future.wait([
+      appProvider.getProfitAndLossSummary(startDate: start, endDate: end),
+      appProvider.getDashboardDailySales(start: start, end: end),
+      appProvider.getTopProductsByQuantity(start: start, end: end),
+      appProvider.getTopProductsByProfit(start: start, end: end),
+      appProvider.getExpenseSummary(start: start, end: end),
+      appProvider.getLowStockCount(),
+    ]);
 
     if (mounted) {
       setState(() {
-        _summary = summary;
-        _dailySales = dailySales;
-        _topSold = topSold;
-        _topProfit = topProfit;
-        _expensesByCategory = expensesByCategory;
-        _lowStockCount = lowStock.length;
+        _summary = results[0] as Map<String, dynamic>;
+        _dailySales = results[1] as List<Map<String, dynamic>>;
+        _topSold = results[2] as List<Map<String, dynamic>>;
+        _topProfit = results[3] as List<Map<String, dynamic>>;
+        _expensesByCategory = results[4] as List<Map<String, dynamic>>;
+        _lowStockCount = results[5] as int;
         _isLoading = false;
       });
     }
@@ -194,6 +147,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() => _period = p);
     _loadAll();
   }
+
+  // ---------- UI ----------
 
   @override
   Widget build(BuildContext context) {
@@ -471,8 +426,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   // Simple horizontal bar list (no extra chart library)
                   ..._dailySales.map((d) {
-                    final max = _dailySales.map((e) => e['total'] as double).reduce((a, b) => a > b ? a : b);
-                    final ratio = max > 0 ? (d['total'] as double) / max : 0.0;
+                    final max = _dailySales.map((e) => (e['total'] as num).toDouble()).reduce((a, b) => a > b ? a : b);
+                    final ratio = max > 0 ? (d['total'] as num).toDouble() / max : 0.0;
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 10),
                       child: Row(
@@ -483,7 +438,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  DateFormat('MM/dd').format(DateTime.parse('${d['date']}T00:00:00')),
+                                  DateFormat('MM/dd').format(DateTime.parse('${d['d']}T00:00:00')),
                                   style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
                                 ),
                                 Text('${d['count']} فاتورة', style: TextStyle(fontSize: 10, color: AppTheme.textHint)),
@@ -505,7 +460,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   ),
                                 ),
                                 const SizedBox(height: 3),
-                                Text('${_fmt.format(d['total'])} ج.س', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                                Text('${_fmt.format((d['total'] as num).toDouble())} ج.س', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                               ],
                             ),
                           ),
@@ -562,14 +517,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(item['name'] as String, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                            Text(item['product_name'] as String, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
                             const SizedBox(height: 2),
-                            Text('${item[qtyKey].toStringAsFixed(0)} $unit', style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
+                            Text('${(item[qtyKey] as num).toStringAsFixed(0)} $unit', style: TextStyle(fontSize: 11, color: AppTheme.textSecondary)),
                           ],
                         ),
                       ),
                       Text(
-                        '${_fmt.format(item[valueKey] as double)} ج.س',
+                        '${_fmt.format((item[valueKey] as num).toDouble())} ج.س',
                         style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: color),
                       ),
                     ],
@@ -615,7 +570,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Flexible(
                         child: Text(c['name'] as String, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13)),
                       ),
-                      Text('${_fmt.format(c['amount'])} ج.س', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.purple.shade700)),
+                      Text('${_fmt.format((c['amount'] as num).toDouble())} ج.س', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Colors.purple.shade700)),
                     ],
                   ),
                 );

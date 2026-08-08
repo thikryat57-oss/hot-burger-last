@@ -4,6 +4,7 @@ import '../../providers/app_provider.dart';
 import '../../core/theme/app_theme.dart';
 import 'package:intl/intl.dart';
 import 'profit_report_screen.dart';
+import '../dashboard/dashboard_screen.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -125,6 +126,16 @@ class _ReportsScreenState extends State<ReportsScreen> with SingleTickerProvider
       appBar: AppBar(
         title: const Text('التقارير'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.dashboard, size: 22),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const DashboardScreen()),
+              );
+            },
+            tooltip: 'لوحة الأعمال',
+          ),
           IconButton(
             icon: const Icon(Icons.account_balance, size: 22),
             onPressed: () {

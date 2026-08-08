@@ -428,10 +428,64 @@ class AppProvider extends ChangeNotifier {
     };
   }
 
-  // Generic read-only query (for analytics reuse)
-  Future<List<Map<String, dynamic>>> rawQuery(String sql, [List<dynamic>? args]) async {
+  // ==================== DASHBOARD (read-only analytics queries) ====================
+
+  /// Daily sales series, grouped by DATE(created_at).
+  Future<List<Map<String, dynamic>>> getDashboardDailySales({required DateTime start, required DateTime end}) async {
     _db ??= await DatabaseHelper.database;
-    return await _db!.rawQuery(sql, args);
+    final startStr = '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
+    final endStr = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
+    final result = await _db!.rawQuery(
+      'SELECT DATE(created_at) as d, COALESCE(SUM(total_amount),0) as total, COUNT(*) as count '
+      'FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? GROUP BY DATE(created_at) ORDER BY d ASC',
+      [startStr, endStr],
+    );
+    return result;
+  }
+
+  /// Top N best-selling products by quantity sold.
+  Future<List<Map<String, dynamic>>> getTopProductsByQuantity({required DateTime start, required DateTime end, int limit = 5}) async {
+    _db ??= await DatabaseHelper.database;
+    final startStr = '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
+    final endStr = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
+    return await _db!.rawQuery(
+      'SELECT product_name, SUM(quantity) as qty, COALESCE(SUM(total),0) as total '
+      'FROM invoice_items WHERE DATE(created_at) BETWEEN ? AND ? '
+      'GROUP BY product_id ORDER BY qty DESC LIMIT ?',
+      [startStr, endStr, limit],
+    );
+  }
+
+  /// Top N most profitable products based on saved total_profit (historical).
+  Future<List<Map<String, dynamic>>> getTopProductsByProfit({required DateTime start, required DateTime end, int limit = 5}) async {
+    _db ??= await DatabaseHelper.database;
+    final startStr = '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
+    final endStr = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
+    return await _db!.rawQuery(
+      'SELECT product_name, SUM(quantity) as qty, COALESCE(SUM(total_profit),0) as profit '
+      'FROM invoice_items WHERE DATE(created_at) BETWEEN ? AND ? '
+      'GROUP BY product_id ORDER BY profit DESC LIMIT ?',
+      [startStr, endStr, limit],
+    );
+  }
+
+  /// Total expenses in the period, grouped by expense name (reuse Expense.name as category).
+  Future<List<Map<String, dynamic>>> getExpenseSummary({required DateTime start, required DateTime end}) async {
+    _db ??= await DatabaseHelper.database;
+    final startStr = '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
+    final endStr = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
+    final result = await _db!.rawQuery(
+      'SELECT name, COALESCE(SUM(amount),0) as amount FROM expenses WHERE date BETWEEN ? AND ? '
+      'GROUP BY name ORDER BY amount DESC',
+      [startStr, endStr],
+    );
+    return result;
+  }
+
+  /// Count of ingredients below their min_quantity (reuse existing logic).
+  Future<int> getLowStockCount() async {
+    final list = await getLowStockIngredients();
+    return list.length;
   }
 
   // Navigation

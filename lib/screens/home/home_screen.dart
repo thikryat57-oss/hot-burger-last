@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
-import '../dashboard/dashboard_screen.dart';
 import '../sales/sales_screen.dart';
 import '../invoices/invoices_screen.dart';
 import '../products/products_screen.dart';
@@ -20,7 +19,6 @@ class HomeScreen extends StatelessWidget {
     return Consumer<AppProvider>(
       builder: (context, appProvider, _) {
         final screens = [
-          const DashboardScreen(),
           const SalesScreen(),
           const InvoicesScreen(),
           const ProductsScreen(),
@@ -37,10 +35,6 @@ class HomeScreen extends StatelessWidget {
             currentIndex: appProvider.currentIndex,
             onTap: (index) => appProvider.setIndex(index),
             items: const [
-              BottomNavigationBarItem(
-                icon: Icon(Icons.dashboard),
-                label: 'لوحة الأعمال',
-              ),
               BottomNavigationBarItem(
                 icon: Icon(Icons.point_of_sale),
                 label: 'المبيعات',
