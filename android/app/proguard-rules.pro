@@ -4,6 +4,7 @@
 
 -dontwarn javax.annotation.**
 -dontwarn org.jetbrains.annotations.**
+-dontwarn com.google.android.play.core.**
 
 # Preserve Flutter plugin registration and Android component entry points.
 -keep class io.flutter.plugins.** { *; }
