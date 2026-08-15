@@ -1,0 +1,14 @@
+# QA Checklist v3.0
+- [ ] Open Dashboard and launch Business Intelligence.
+- [ ] Change date range and refresh.
+- [ ] Verify sales and invoice count against Reports.
+- [ ] Verify cancelled/returned invoices are excluded.
+- [ ] Verify payment totals match POS payment methods (cash/bank/card).
+- [ ] Verify profit and expense values against existing reports.
+- [ ] Verify top customers only include valid customer-linked sales.
+- [ ] Verify low-stock alerts match inventory thresholds.
+- [ ] Test on phone portrait and tablet landscape.
+- [ ] Run `flutter pub get`.
+- [ ] Run `flutter analyze`.
+- [ ] Run `flutter test`.
+- [ ] Build `flutter build apk --release`.

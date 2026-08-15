@@ -1,0 +1,740 @@
+class User {
+  final int? id;
+  final String name;
+  final String password;
+  final String role;
+  final String? createdAt;
+
+  User({
+    this.id,
+    required this.name,
+    required this.password,
+    this.role = 'manager',
+    this.createdAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'password': password,
+      'role': role,
+      'created_at': createdAt,
+    };
+  }
+
+  factory User.fromMap(Map<String, dynamic> map) {
+    return User(
+      id: map['id'],
+      name: map['name'],
+      password: map['password'],
+      role: map['role'],
+      createdAt: map['created_at'],
+    );
+  }
+}
+
+class Category {
+  final int? id;
+  final String name;
+  final String? description;
+  final bool isActive;
+  final String? createdAt;
+  final String? updatedAt;
+
+  Category({
+    this.id,
+    required this.name,
+    this.description,
+    this.isActive = true,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'description': description,
+      'is_active': isActive ? 1 : 0,
+      'created_at': createdAt,
+      'updated_at': updatedAt,
+    };
+  }
+
+  factory Category.fromMap(Map<String, dynamic> map) {
+    return Category(
+      id: map['id'],
+      name: map['name'],
+      description: map['description'],
+      isActive: map['is_active'] == 1,
+      createdAt: map['created_at'],
+      updatedAt: map['updated_at'],
+    );
+  }
+}
+
+class Product {
+  final int? id;
+  final String name;
+  final int? categoryId;
+  final String? categoryName;
+  final double price;
+  final double cost;
+  final String? description;
+  final String? imagePath;
+  final bool isAvailable;
+  final String? createdAt;
+  final String? updatedAt;
+
+  Product({
+    this.id,
+    required this.name,
+    this.categoryId,
+    this.categoryName,
+    required this.price,
+    this.cost = 0,
+    this.description,
+    this.imagePath,
+    this.isAvailable = true,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'category_id': categoryId,
+      'price': price,
+      'cost': cost,
+      'description': description,
+      'image_path': imagePath,
+      'is_available': isAvailable ? 1 : 0,
+      'created_at': createdAt,
+      'updated_at': updatedAt,
+    };
+  }
+
+  factory Product.fromMap(Map<String, dynamic> map) {
+    return Product(
+      id: map['id'],
+      name: map['name'],
+      categoryId: map['category_id'],
+      categoryName: map['category_name'],
+      price: map['price']?.toDouble() ?? 0,
+      cost: map['cost']?.toDouble() ?? 0,
+      description: map['description'],
+      imagePath: map['image_path'],
+      isAvailable: map['is_available'] == 1,
+      createdAt: map['created_at'],
+      updatedAt: map['updated_at'],
+    );
+  }
+}
+
+class RawMaterial {
+  final int? id;
+  final String name;
+  final String? unit;
+  final double quantity;
+  final double cost;
+  final String? supplier;
+  final String? notes;
+  final bool isActive;
+  final String? createdAt;
+  final String? updatedAt;
+
+  RawMaterial({
+    this.id,
+    required this.name,
+    this.unit,
+    this.quantity = 0,
+    this.cost = 0,
+    this.supplier,
+    this.notes,
+    this.isActive = true,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'unit': unit,
+      'quantity': quantity,
+      'cost': cost,
+      'supplier': supplier,
+      'notes': notes,
+      'is_active': isActive ? 1 : 0,
+      'created_at': createdAt,
+      'updated_at': updatedAt,
+    };
+  }
+
+  factory RawMaterial.fromMap(Map<String, dynamic> map) {
+    return RawMaterial(
+      id: map['id'],
+      name: map['name'],
+      unit: map['unit'],
+      quantity: map['quantity']?.toDouble() ?? 0,
+      cost: map['cost']?.toDouble() ?? 0,
+      supplier: map['supplier'],
+      notes: map['notes'],
+      isActive: map['is_active'] == 1,
+      createdAt: map['created_at'],
+      updatedAt: map['updated_at'],
+    );
+  }
+}
+
+
+class Customer {
+  final int? id;
+  final String name;
+  final String? phone;
+  final String? email;
+  final int points;
+  final double totalSpent;
+  final int visitCount;
+  final String? notes;
+  final bool isActive;
+
+  Customer({
+    this.id,
+    required this.name,
+    this.phone,
+    this.email,
+    this.points = 0,
+    this.totalSpent = 0,
+    this.visitCount = 0,
+    this.notes,
+    this.isActive = true,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'id': id, 'name': name, 'phone': phone, 'email': email,
+    'points': points, 'total_spent': totalSpent, 'visit_count': visitCount,
+    'notes': notes, 'is_active': isActive ? 1 : 0,
+  };
+
+  factory Customer.fromMap(Map<String, dynamic> map) => Customer(
+    id: map['id'],
+    name: map['name']?.toString() ?? '',
+    phone: map['phone']?.toString(),
+    email: map['email']?.toString(),
+    points: (map['points'] as num?)?.toInt() ?? 0,
+    totalSpent: (map['total_spent'] as num?)?.toDouble() ?? 0,
+    visitCount: (map['visit_count'] as num?)?.toInt() ?? 0,
+    notes: map['notes']?.toString(),
+    isActive: map['is_active'] == 1,
+  );
+}
+
+class Invoice {
+  final int? id;
+  final String invoiceNumber;
+  final double totalAmount;
+  final double subtotalAmount;
+  final double discountAmount;
+  final double paidAmount;
+  final double changeAmount;
+  final String status;
+  final String paymentMethod;
+  final int? customerId;
+  final String? notes;
+  final String? createdAt;
+  final List<InvoiceItem>? items;
+
+  Invoice({
+    this.id,
+    required this.invoiceNumber,
+    required this.totalAmount,
+    this.subtotalAmount = 0,
+    this.discountAmount = 0,
+    this.paidAmount = 0,
+    this.changeAmount = 0,
+    this.status = 'completed',
+    this.paymentMethod = 'cash',
+    this.customerId,
+    this.notes,
+    this.createdAt,
+    this.items,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'invoice_number': invoiceNumber,
+      'total_amount': totalAmount,
+      'subtotal_amount': subtotalAmount,
+      'discount_amount': discountAmount,
+      'paid_amount': paidAmount,
+      'change_amount': changeAmount,
+      'status': status,
+      'payment_method': paymentMethod,
+      'customer_id': customerId,
+      'notes': notes,
+      'created_at': createdAt,
+    };
+  }
+
+  factory Invoice.fromMap(Map<String, dynamic> map) {
+    return Invoice(
+      id: map['id'],
+      invoiceNumber: map['invoice_number'],
+      totalAmount: map['total_amount']?.toDouble() ?? 0,
+      subtotalAmount: map['subtotal_amount']?.toDouble() ?? (map['total_amount']?.toDouble() ?? 0),
+      discountAmount: map['discount_amount']?.toDouble() ?? 0,
+      paidAmount: map['paid_amount']?.toDouble() ?? (map['total_amount']?.toDouble() ?? 0),
+      changeAmount: map['change_amount']?.toDouble() ?? 0,
+      status: map['status'],
+      paymentMethod: map['payment_method'] ?? 'cash',
+      customerId: map['customer_id'],
+      notes: map['notes'],
+      createdAt: map['created_at'],
+    );
+  }
+}
+
+class InvoiceItem {
+  final int? id;
+  final int invoiceId;
+  final int productId;
+  final String productName;
+  final int quantity;
+  final double price;
+  final double total;
+  final double costSnapshot;
+  final double unitProfit;
+  final double totalProfit;
+
+  InvoiceItem({
+    this.id,
+    required this.invoiceId,
+    required this.productId,
+    required this.productName,
+    required this.quantity,
+    required this.price,
+    required this.total,
+    this.costSnapshot = 0,
+    this.unitProfit = 0,
+    this.totalProfit = 0,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'invoice_id': invoiceId,
+      'product_id': productId,
+      'product_name': productName,
+      'quantity': quantity,
+      'price': price,
+      'total': total,
+      'cost_snapshot': costSnapshot,
+      'unit_profit': unitProfit,
+      'total_profit': totalProfit,
+    };
+  }
+
+  factory InvoiceItem.fromMap(Map<String, dynamic> map) {
+    return InvoiceItem(
+      id: map['id'],
+      invoiceId: map['invoice_id'],
+      productId: map['product_id'],
+      productName: map['product_name'],
+      quantity: map['quantity'],
+      price: map['price']?.toDouble() ?? 0,
+      total: map['total']?.toDouble() ?? 0,
+      costSnapshot: map['cost_snapshot']?.toDouble() ?? 0,
+      unitProfit: map['unit_profit']?.toDouble() ?? 0,
+      totalProfit: map['total_profit']?.toDouble() ?? 0,
+    );
+  }
+}
+
+class Expense {
+  final int? id;
+  final String name;
+  final double amount;
+  final String date;
+  final String? notes;
+  final String? createdAt;
+
+  Expense({
+    this.id,
+    required this.name,
+    required this.amount,
+    required this.date,
+    this.notes,
+    this.createdAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'amount': amount,
+      'date': date,
+      'notes': notes,
+      'created_at': createdAt,
+    };
+  }
+
+  factory Expense.fromMap(Map<String, dynamic> map) {
+    return Expense(
+      id: map['id'],
+      name: map['name'],
+      amount: map['amount']?.toDouble() ?? 0,
+      date: map['date'],
+      notes: map['notes'],
+      createdAt: map['created_at'],
+    );
+  }
+}
+
+// Cart item for sales
+class CartItem {
+  final int productId;
+  final String productName;
+  final double price;
+  int quantity;
+
+  CartItem({
+    required this.productId,
+    required this.productName,
+    required this.price,
+    this.quantity = 1,
+  });
+
+  double get total => price * quantity;
+
+  Map<String, dynamic> toMap() {
+    return {
+      'product_id': productId,
+      'product_name': productName,
+      'price': price,
+      'quantity': quantity,
+      'total': total,
+    };
+  }
+}
+// Inventory / Ingredient model for raw materials
+class IngredientModel {
+  final int? id;
+  final String name;
+  final double quantity;
+  final String unit;
+  final double minQuantity;
+  final double costPrice;
+  final String? createdAt;
+  final String? updatedAt;
+
+  IngredientModel({
+    this.id,
+    required this.name,
+    this.quantity = 0,
+    this.unit = 'حبة',
+    this.minQuantity = 0,
+    this.costPrice = 0,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'quantity': quantity,
+      'unit': unit,
+      'min_quantity': minQuantity,
+      'cost_price': costPrice,
+      'created_at': createdAt,
+      'updated_at': updatedAt,
+    };
+  }
+
+  factory IngredientModel.fromMap(Map<String, dynamic> map) {
+    return IngredientModel(
+      id: map['id'],
+      name: map['name'],
+      quantity: map['quantity']?.toDouble() ?? 0,
+      unit: map['unit'] ?? 'حبة',
+      minQuantity: map['min_quantity']?.toDouble() ?? 0,
+      costPrice: map['cost_price']?.toDouble() ?? 0,
+      createdAt: map['created_at'],
+      updatedAt: map['updated_at'],
+    );
+  }
+
+  bool get isLowStock => quantity <= minQuantity;
+}
+
+// Product-Ingredient relation model (recipe link)
+class ProductIngredient {
+  final int? id;
+  final int productId;
+  final int ingredientId;
+  final double quantity; // الكمية المستهلكة من المادة الخام لكل منتج
+
+  ProductIngredient({
+    this.id,
+    required this.productId,
+    required this.ingredientId,
+    required this.quantity,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'product_id': productId,
+      'ingredient_id': ingredientId,
+      'quantity': quantity,
+    };
+  }
+
+  factory ProductIngredient.fromMap(Map<String, dynamic> map) {
+    return ProductIngredient(
+      id: map['id'],
+      productId: map['product_id'],
+      ingredientId: map['ingredient_id'],
+      quantity: map['quantity']?.toDouble() ?? 0,
+    );
+  }
+}
+
+class Supplier {
+  final int? id;
+  final String name;
+  final String? phone;
+  final String? address;
+  final String? notes;
+  final double balance;
+  final String? createdAt;
+  final String? updatedAt;
+
+  Supplier({
+    this.id,
+    required this.name,
+    this.phone,
+    this.address,
+    this.notes,
+    this.balance = 0,
+    this.createdAt,
+    this.updatedAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'phone': phone,
+      'address': address,
+      'notes': notes,
+      'balance': balance,
+      'created_at': createdAt,
+      'updated_at': updatedAt,
+    };
+  }
+
+  factory Supplier.fromMap(Map<String, dynamic> map) {
+    return Supplier(
+      id: map['id'],
+      name: map['name'],
+      phone: map['phone'],
+      address: map['address'],
+      notes: map['notes'],
+      balance: map['balance']?.toDouble() ?? 0,
+      createdAt: map['created_at'],
+      updatedAt: map['updated_at'],
+    );
+  }
+}
+
+class PurchaseInvoice {
+  final int? id;
+  final int supplierId;
+  final String? supplierName;
+  final String invoiceNumber;
+  final double totalAmount;
+  final double paidAmount;
+  final String status; // paid, partial, unpaid
+  final String? notes;
+  final String date;
+  final String? createdAt;
+  final List<PurchaseItem>? items;
+
+  PurchaseInvoice({
+    this.id,
+    required this.supplierId,
+    this.supplierName,
+    required this.invoiceNumber,
+    required this.totalAmount,
+    this.paidAmount = 0,
+    required this.status,
+    this.notes,
+    required this.date,
+    this.createdAt,
+    this.items,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'supplier_id': supplierId,
+      'invoice_number': invoiceNumber,
+      'total_amount': totalAmount,
+      'paid_amount': paidAmount,
+      'status': status,
+      'notes': notes,
+      'date': date,
+      'created_at': createdAt,
+    };
+  }
+
+  factory PurchaseInvoice.fromMap(Map<String, dynamic> map) {
+    return PurchaseInvoice(
+      id: map['id'],
+      supplierId: map['supplier_id'],
+      supplierName: map['supplier_name'],
+      invoiceNumber: map['invoice_number'],
+      totalAmount: map['total_amount']?.toDouble() ?? 0,
+      paidAmount: map['paid_amount']?.toDouble() ?? 0,
+      status: map['status'],
+      notes: map['notes'],
+      date: map['date'],
+      createdAt: map['created_at'],
+    );
+  }
+}
+
+class PurchaseItem {
+  final int? id;
+  final int? purchaseInvoiceId;
+  final int ingredientId;
+  final String? ingredientName;
+  final double quantity;
+  final double unitCost;
+  final double totalCost;
+
+  PurchaseItem({
+    this.id,
+    this.purchaseInvoiceId,
+    required this.ingredientId,
+    this.ingredientName,
+    required this.quantity,
+    required this.unitCost,
+    required this.totalCost,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'purchase_invoice_id': purchaseInvoiceId,
+      'ingredient_id': ingredientId,
+      'quantity': quantity,
+      'unit_cost': unitCost,
+      'total_cost': totalCost,
+    };
+  }
+
+  factory PurchaseItem.fromMap(Map<String, dynamic> map) {
+    return PurchaseItem(
+      id: map['id'],
+      purchaseInvoiceId: map['purchase_invoice_id'],
+      ingredientId: map['ingredient_id'],
+      ingredientName: map['ingredient_name'],
+      quantity: map['quantity']?.toDouble() ?? 0,
+      unitCost: map['unit_cost']?.toDouble() ?? 0,
+      totalCost: map['total_cost']?.toDouble() ?? 0,
+    );
+  }
+}
+
+class SupplierPayment {
+  final int? id;
+  final int supplierId;
+  final int? purchaseInvoiceId;
+  final double amount;
+  final String date;
+  final String? notes;
+  final String? createdAt;
+
+  SupplierPayment({
+    this.id,
+    required this.supplierId,
+    this.purchaseInvoiceId,
+    required this.amount,
+    required this.date,
+    this.notes,
+    this.createdAt,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'supplier_id': supplierId,
+      'purchase_invoice_id': purchaseInvoiceId,
+      'amount': amount,
+      'date': date,
+      'notes': notes,
+      'created_at': createdAt,
+    };
+  }
+
+  factory SupplierPayment.fromMap(Map<String, dynamic> map) {
+    return SupplierPayment(
+      id: map['id'],
+      supplierId: map['supplier_id'],
+      purchaseInvoiceId: map['purchase_invoice_id'],
+      amount: map['amount']?.toDouble() ?? 0,
+      date: map['date'],
+      notes: map['notes'],
+      createdAt: map['created_at'],
+    );
+  }
+}
+
+
+class Shift {
+  final int? id;
+  final int userId;
+  final String userName;
+  final String openedAt;
+  final String? closedAt;
+  final double openingCash;
+  final double? expectedCash;
+  final double? actualCash;
+  final double? difference;
+  final String status;
+  final String? notes;
+
+  Shift({
+    this.id,
+    required this.userId,
+    required this.userName,
+    required this.openedAt,
+    this.closedAt,
+    this.openingCash = 0,
+    this.expectedCash,
+    this.actualCash,
+    this.difference,
+    this.status = 'open',
+    this.notes,
+  });
+
+  factory Shift.fromMap(Map<String, dynamic> map) => Shift(
+    id: map['id'],
+    userId: map['user_id'],
+    userName: map['user_name'],
+    openedAt: map['opened_at'],
+    closedAt: map['closed_at'],
+    openingCash: (map['opening_cash'] as num?)?.toDouble() ?? 0,
+    expectedCash: (map['expected_cash'] as num?)?.toDouble(),
+    actualCash: (map['actual_cash'] as num?)?.toDouble(),
+    difference: (map['difference'] as num?)?.toDouble(),
+    status: map['status'] ?? 'open',
+    notes: map['notes'],
+  );
+}

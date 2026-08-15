@@ -1,0 +1,55 @@
+name: Build Android APK
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze Dart code
+        run: flutter analyze
+
+      - name: Build debug APK
+        run: flutter build apk --debug
+
+      - name: Package debug APK
+        run: zip -j hot-burger-debug-apk.zip build/app/outputs/flutter-apk/app-debug.apk
+
+      - name: Upload APK ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk
+          path: hot-burger-debug-apk.zip
+
+      - name: Upload raw APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apk-raw
+          path: build/app/outputs/flutter-apk/app-debug.apk
