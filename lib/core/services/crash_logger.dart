@@ -13,6 +13,19 @@ class CrashLogger {
     return File('${directory.path}/$_fileName');
   }
 
+  static Future<void> checkpoint(String name) async {
+    try {
+      final file = await _file();
+      await file.writeAsString(
+        '[checkpoint] $name - ${DateTime.now()}\n',
+        mode: FileMode.append,
+        flush: true,
+      );
+    } catch (_) {
+      // Breadcrumb logging must never affect the sale flow.
+    }
+  }
+
   static Future<void> record(Object error, StackTrace stackTrace) async {
     try {
       final file = await _file();

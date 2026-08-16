@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
+import '../../core/services/crash_logger.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/pdf_helper.dart';
 import '../../models/models.dart';
@@ -205,11 +206,15 @@ class _SalesScreenState extends State<SalesScreen> {
             actions: [
               TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('رجوع')),
               FilledButton(
-                onPressed: _selectedPaymentMethod == 'cash' && paid < net ? null : () => Navigator.pop(dialogContext, {
-                  'discount': safeDiscount,
-                  'paid': _selectedPaymentMethod == 'cash' ? paid : net,
-                  'change': _selectedPaymentMethod == 'cash' ? change : 0,
-                }),
+                onPressed: _selectedPaymentMethod == 'cash' && paid < net ? null : () async {
+                  await CrashLogger.checkpoint('sales.confirm_dialog.before_navigator_pop');
+                  if (!dialogContext.mounted) return;
+                  Navigator.pop(dialogContext, {
+                    'discount': safeDiscount,
+                    'paid': _selectedPaymentMethod == 'cash' ? paid : net,
+                    'change': _selectedPaymentMethod == 'cash' ? change : 0,
+                  });
+                },
                 child: const Text('إتمام البيع'),
               ),
             ],
@@ -322,7 +327,9 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
 
       // Keep the confirmation route independent from the save/loading state.
       // The underlying screen is locked only after the user confirms the sale.
+      await CrashLogger.checkpoint('sales.confirm_dialog.before_show');
       final checkout = await _showCheckoutDialog();
+      await CrashLogger.checkpoint('sales.confirm_dialog.after_close');
       if (checkout == null || !mounted) return;
 
       setState(() => _isSavingInvoice = true);
@@ -344,7 +351,9 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
         customerId: _selectedCustomer?.id,
       );
 
+      await CrashLogger.checkpoint('sales.createInvoice.before');
       final invoiceId = await appProvider.createInvoice(invoice, _cart);
+      await CrashLogger.checkpoint('sales.createInvoice.after_success');
       if (!mounted) return;
       final savedInvoice = await appProvider.getInvoiceById(invoiceId);
       if (!mounted) return;
@@ -369,13 +378,17 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
                 ),
         ),
       );
+      await CrashLogger.checkpoint('sales.cart_clear.before_setState');
       setState(() {
         _cart.clear();
         _selectedPaymentMethod = 'cash';
         _discountAmount = 0;
         _selectedCustomer = null;
       });
+      await CrashLogger.checkpoint('sales.cart_clear.after_setState');
+      await CrashLogger.checkpoint('sales.products_reload.before');
       await _loadProducts();
+      await CrashLogger.checkpoint('sales.products_reload.after');
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

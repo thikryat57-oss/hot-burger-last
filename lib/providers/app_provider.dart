@@ -3,6 +3,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import '../core/database/database_helper.dart';
+import '../core/services/crash_logger.dart';
 import '../models/models.dart';
 
 class AppProvider extends ChangeNotifier {
@@ -584,6 +585,7 @@ class AppProvider extends ChangeNotifier {
       costSnapshots[item.productId] = await calculateProductCost(item.productId);
     }
     final now = DateTime.now().toIso8601String();
+    await CrashLogger.checkpoint('provider.createInvoice.transaction.before');
     final invoiceId = await _db!.transaction<int>((txn) async {
       final id = await txn.insert('invoices', {
         'invoice_number': invoice.invoiceNumber,
@@ -609,6 +611,7 @@ class AppProvider extends ChangeNotifier {
           'total_profit': unitProfit * item.quantity,
         });
       }
+      await CrashLogger.checkpoint('provider.createInvoice.transaction.after_invoice_items');
       for (final entry in requiredIngredients.entries) {
         final ingredientId = entry.key; final delta = entry.value;
         final current = await txn.query('inventory', columns: ['quantity', 'cost_price', 'name'], where: 'id = ?', whereArgs: [ingredientId]);
@@ -625,6 +628,7 @@ class AppProvider extends ChangeNotifier {
           'reference_type': 'invoice', 'reference_id': id,
         });
       }
+      await CrashLogger.checkpoint('provider.createInvoice.transaction.after_requiredIngredients');
       await txn.insert('invoice_audit_log', {
         'invoice_id': id, 'action_type': 'created', 'action_date': now,
         'user_id': _currentUser?.id, 'user_name': _currentUser?.name, 'note': 'تم إنشاء الفاتورة',
@@ -654,9 +658,13 @@ class AppProvider extends ChangeNotifier {
           }
         }
       }
+      await CrashLogger.checkpoint('provider.createInvoice.transaction.after_customer_update');
       return id;
     });
+    await CrashLogger.checkpoint('provider.createInvoice.transaction.after_success');
+    await CrashLogger.checkpoint('provider.createInvoice.low_stock.before');
     final lowStockIngredients = await DatabaseHelper.getLowStockIngredients();
+    await CrashLogger.checkpoint('provider.createInvoice.low_stock.after');
     if (lowStockIngredients.isNotEmpty) {
       final names = lowStockIngredients.map((e) => e['name'] as String).toList();
       final warning = 'تحذير: ${names.join('، ')}';
