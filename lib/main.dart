@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -6,27 +9,45 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'providers/app_provider.dart';
 import 'screens/auth/login_screen.dart';
+import 'core/services/crash_logger.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+void main() {
+  runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Allow portrait and landscape so POS/KDS can use tablets and wide displays.
-  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.white,
-    statusBarIconBrightness: Brightness.dark,
-    systemNavigationBarColor: Colors.white,
-    systemNavigationBarIconBrightness: Brightness.dark,
-  ));
+    FlutterError.onError = (details) {
+      FlutterError.presentError(details);
+      unawaited(CrashLogger.record(
+        details.exception,
+        details.stack ?? StackTrace.current,
+      ));
+    };
 
-  final appProvider = AppProvider();
-  await appProvider.initDatabase();
+    PlatformDispatcher.instance.onError = (error, stack) {
+      unawaited(CrashLogger.record(error, stack));
+      return true;
+    };
 
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => appProvider,
-      child: const HotBurgerApp(),
-    ),
-  );
+    // Allow portrait and landscape so POS/KDS can use tablets and wide displays.
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.white,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.white,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ));
+
+    final appProvider = AppProvider();
+    await appProvider.initDatabase();
+
+    runApp(
+      ChangeNotifierProvider(
+        create: (_) => appProvider,
+        child: const HotBurgerApp(),
+      ),
+    );
+  }, (error, stack) {
+    unawaited(CrashLogger.record(error, stack));
+  });
 }
 
 class HotBurgerApp extends StatelessWidget {

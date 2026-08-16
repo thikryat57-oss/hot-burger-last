@@ -36,20 +36,20 @@ jobs:
       - name: Analyze Dart code
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Build release APK
-        run: flutter build apk --release
+      - name: Build debug APK
+        run: flutter build apk --debug
 
-      - name: Package release APK
-        run: zip -j hot-burger-release-apk.zip build/app/outputs/flutter-apk/app-release.apk
+      - name: Package debug APK
+        run: zip -j hot-burger-crash-logger-debug.zip build/app/outputs/flutter-apk/app-debug.apk
 
       - name: Upload APK ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: release-apk
-          path: hot-burger-release-apk.zip
+          name: crash-logger-debug-apk
+          path: hot-burger-crash-logger-debug.zip
 
       - name: Upload raw APK
         uses: actions/upload-artifact@v4
         with:
-          name: release-apk-raw
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: crash-logger-debug-apk-raw
+          path: build/app/outputs/flutter-apk/app-debug.apk

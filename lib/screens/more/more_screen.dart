@@ -15,6 +15,7 @@ import '../users/user_management_screen.dart';
 import '../kitchen_display_screen.dart';
 import '../customers/customers_screen.dart';
 import '../analytics/business_intelligence_screen.dart';
+import 'crash_log_screen.dart';
 import 'package:provider/provider.dart';
 
 class MoreScreen extends StatelessWidget {
@@ -61,6 +62,7 @@ class MoreScreen extends StatelessWidget {
           _sectionTitle('التقارير والبيانات'),
           const SizedBox(height: 10),
           _buildGrid(context, [
+            _MenuItem('سجل الأخطاء', 'عرض الأخطاء التشخيصية ونسخها أو مشاركتها', Icons.bug_report_outlined, AppTheme.errorColor, const CrashLogScreen()),
             if (context.read<AppProvider>().canManageFinance()) _MenuItem('الذكاء التجاري', 'مؤشرات الربح والعملاء وطرق الدفع وساعات الذروة', Icons.insights_rounded, AppTheme.primaryColor, const BusinessIntelligenceScreen()),
             if (context.read<AppProvider>().canManageFinance()) _MenuItem('التقارير', 'مبيعات يومية وشهرية', Icons.bar_chart_rounded, AppTheme.infoColor, const ReportsScreen()),
             if (context.read<AppProvider>().canManageFinance()) _MenuItem('الأرباح والخسائر', 'تحليل الأداء المالي', Icons.trending_up_rounded, AppTheme.successColor, const ProfitReportScreen()),
