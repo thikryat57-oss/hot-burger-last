@@ -10,6 +10,7 @@ import 'core/theme/app_theme.dart';
 import 'providers/app_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'core/services/crash_logger.dart';
+import 'core/services/debug_status.dart';
 
 void main() {
   runZonedGuarded(() async {
@@ -63,7 +64,41 @@ class HotBurgerApp extends StatelessWidget {
       home: const LoginScreen(),
       builder: (context, child) => Directionality(
         textDirection: TextDirection.rtl,
-        child: child ?? const SizedBox.shrink(),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            child ?? const SizedBox.shrink(),
+            Positioned(
+              left: 4,
+              right: 4,
+              bottom: 4,
+              child: IgnorePointer(
+                child: ValueListenableBuilder<String>(
+                  valueListenable: debugStatus,
+                  builder: (context, status, _) => Align(
+                    alignment: Alignment.bottomCenter,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.78),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        child: Text(
+                          'DEBUG: $status',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.white, fontSize: 10),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

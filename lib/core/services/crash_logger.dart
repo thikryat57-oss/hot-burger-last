@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
+import 'debug_status.dart';
 
 class CrashLogger {
   CrashLogger._();
@@ -14,6 +15,11 @@ class CrashLogger {
   }
 
   static Future<void> checkpoint(String name) async {
+    updateDebugStatus(name);
+    unawaited(_writeCheckpointToDisk(name));
+  }
+
+  static Future<void> _writeCheckpointToDisk(String name) async {
     try {
       final file = await _file();
       await file.writeAsString(
