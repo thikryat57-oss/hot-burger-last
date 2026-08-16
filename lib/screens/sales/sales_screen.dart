@@ -123,6 +123,7 @@ class _SalesScreenState extends State<SalesScreen> {
     final controller = TextEditingController(text: _discountAmount.toStringAsFixed(2));
     final value = await showDialog<double>(
       context: context,
+      useRootNavigator: true,
       builder: (dialogContext) => AlertDialog(
         title: const Text('خصم على الفاتورة'),
         content: TextField(
@@ -136,11 +137,11 @@ class _SalesScreenState extends State<SalesScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
+          TextButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(), child: const Text('إلغاء')),
           FilledButton(
             onPressed: () {
               final value = (double.tryParse(controller.text) ?? 0).clamp(0, _subtotalAmount).toDouble();
-              Navigator.pop(dialogContext, value);
+              Navigator.of(dialogContext, rootNavigator: true).pop(value);
             },
             child: const Text('حفظ الخصم'),
           ),
@@ -155,6 +156,7 @@ class _SalesScreenState extends State<SalesScreen> {
     final paidController = TextEditingController(text: _totalAmount.toStringAsFixed(2));
     final result = await showDialog<Map<String, double>>(
       context: context,
+      useRootNavigator: true,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
           final discount = double.tryParse(discountController.text) ?? 0;
@@ -204,12 +206,12 @@ class _SalesScreenState extends State<SalesScreen> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('رجوع')),
+              TextButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(), child: const Text('رجوع')),
               FilledButton(
                 onPressed: _selectedPaymentMethod == 'cash' && paid < net ? null : () async {
                   await CrashLogger.checkpoint('sales.confirm_dialog.before_navigator_pop');
                   if (!dialogContext.mounted) return;
-                  Navigator.pop(dialogContext, {
+                  Navigator.of(dialogContext, rootNavigator: true).pop({
                     'discount': safeDiscount,
                     'paid': _selectedPaymentMethod == 'cash' ? paid : net,
                     'change': _selectedPaymentMethod == 'cash' ? change : 0,
@@ -234,6 +236,7 @@ class _SalesScreenState extends State<SalesScreen> {
     Customer? selected = _selectedCustomer;
     final result = await showDialog<Customer?>(
       context: context,
+      useRootNavigator: true,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
           return AlertDialog(
@@ -287,8 +290,8 @@ class _SalesScreenState extends State<SalesScreen> {
               ),
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
-              FilledButton(onPressed: () => Navigator.pop(dialogContext, selected), child: const Text('اختيار')),
+              TextButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(), child: const Text('إلغاء')),
+              FilledButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(selected), child: const Text('اختيار')),
             ],
           );
         },
@@ -408,6 +411,7 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
     final nameController = TextEditingController();
     final name = await showDialog<String>(
       context: context,
+      useRootNavigator: true,
       builder: (dialogContext) => AlertDialog(
         title: const Text('تعليق الطلب'),
         content: TextField(
@@ -419,8 +423,8 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(dialogContext, nameController.text.trim()), child: const Text('تعليق الطلب')),
+          TextButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(nameController.text.trim()), child: const Text('تعليق الطلب')),
         ],
       ),
     );
