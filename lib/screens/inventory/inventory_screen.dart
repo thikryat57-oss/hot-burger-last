@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
@@ -6,7 +7,9 @@ import '../../models/models.dart';
 import 'inventory_history_screen.dart';
 
 class InventoryScreen extends StatelessWidget {
-  const InventoryScreen({super.key});
+  final ValueListenable<bool>? activeListenable;
+
+  const InventoryScreen({super.key, this.activeListenable});
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +23,14 @@ class InventoryScreen extends StatelessWidget {
               Tab(text: 'سجل الحركات', icon: Icon(Icons.history)),
             ],
           ),
-          const Expanded(child: TabBarView(children: [_InventoryList(), InventoryHistoryScreen()])),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _InventoryList(activeListenable: activeListenable),
+                const InventoryHistoryScreen(),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -28,7 +38,9 @@ class InventoryScreen extends StatelessWidget {
 }
 
 class _InventoryList extends StatefulWidget {
-  const _InventoryList();
+  final ValueListenable<bool>? activeListenable;
+
+  const _InventoryList({this.activeListenable});
 
   @override
   State<_InventoryList> createState() => _InventoryScreenState();
@@ -43,6 +55,19 @@ class _InventoryScreenState extends State<_InventoryList> {
   void initState() {
     super.initState();
     _loadData();
+    widget.activeListenable?.addListener(_handleActiveChanged);
+  }
+
+  void _handleActiveChanged() {
+    if (widget.activeListenable?.value == true) {
+      _loadData();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.activeListenable?.removeListener(_handleActiveChanged);
+    super.dispose();
   }
 
   Future<void> _loadData() async {

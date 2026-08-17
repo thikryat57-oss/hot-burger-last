@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -7,7 +8,9 @@ import '../../models/models.dart';
 import 'invoice_detail_screen.dart';
 
 class InvoicesScreen extends StatefulWidget {
-  const InvoicesScreen({super.key});
+  final ValueListenable<bool>? activeListenable;
+
+  const InvoicesScreen({super.key, this.activeListenable});
 
   @override
   State<InvoicesScreen> createState() => _InvoicesScreenState();
@@ -23,10 +26,18 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
   void initState() {
     super.initState();
     _loadInvoices();
+    widget.activeListenable?.addListener(_handleActiveChanged);
+  }
+
+  void _handleActiveChanged() {
+    if (widget.activeListenable?.value == true) {
+      _loadInvoices();
+    }
   }
 
   @override
   void dispose() {
+    widget.activeListenable?.removeListener(_handleActiveChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -200,24 +211,32 @@ class _InvoicesScreenState extends State<InvoicesScreen> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _filteredInvoices.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.receipt_long, size: 80, color: AppTheme.textHint),
-                            const SizedBox(height: 16),
-                            Text(
-                              'لا توجد فواتير',
-                              style: TextStyle(fontSize: 18, color: AppTheme.textSecondary),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: _filteredInvoices.length,
-                        itemBuilder: (context, index) {
+                : RefreshIndicator(
+                    onRefresh: _loadInvoices,
+                    child: _filteredInvoices.isEmpty
+                        ? ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: [
+                              SizedBox(
+                                height: 280,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.receipt_long, size: 80, color: AppTheme.textHint),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'لا توجد فواتير',
+                                      style: TextStyle(fontSize: 18, color: AppTheme.textSecondary),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            itemCount: _filteredInvoices.length,
+                            itemBuilder: (context, index) {
                           final invoice = _filteredInvoices[index];
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),

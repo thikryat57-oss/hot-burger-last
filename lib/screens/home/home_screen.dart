@@ -18,16 +18,20 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   late final List<Widget> _screens;
   late final ValueNotifier<bool> _dashboardActive;
+  late final ValueNotifier<bool> _invoicesActive;
+  late final ValueNotifier<bool> _inventoryActive;
 
   @override
   void initState() {
     super.initState();
     _dashboardActive = ValueNotifier(false);
+    _invoicesActive = ValueNotifier(false);
+    _inventoryActive = ValueNotifier(false);
     _screens = [
       const SalesScreen(),
-      const InvoicesScreen(),
+      InvoicesScreen(activeListenable: _invoicesActive),
       DashboardScreen(activeListenable: _dashboardActive),
-      const InventoryScreen(),
+      InventoryScreen(activeListenable: _inventoryActive),
       const MoreScreen(),
     ];
   }
@@ -35,11 +39,15 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _dashboardActive.dispose();
+    _invoicesActive.dispose();
+    _inventoryActive.dispose();
     super.dispose();
   }
 
   void _setIndex(AppProvider appProvider, int index) {
     _dashboardActive.value = index == 2;
+    _invoicesActive.value = index == 1;
+    _inventoryActive.value = index == 3;
     appProvider.setIndex(index);
   }
 
@@ -50,7 +58,11 @@ class _HomeScreenState extends State<HomeScreen> {
     final appProvider = context.read<AppProvider>();
     if (_dashboardActive.value != (index == 2)) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _dashboardActive.value = index == 2;
+        if (mounted) {
+          _dashboardActive.value = index == 2;
+          _invoicesActive.value = index == 1;
+          _inventoryActive.value = index == 3;
+        }
       });
     }
 
@@ -97,7 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: index == 2
           ? FloatingActionButton.extended(
-              onPressed: () => appProvider.setIndex(0),
+              onPressed: () => _setIndex(appProvider, 0),
               icon: const Icon(Icons.add_shopping_cart),
               label: const Text('بيع جديد', style: TextStyle(fontWeight: FontWeight.w800)),
             )
