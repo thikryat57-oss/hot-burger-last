@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/app_provider.dart';
 import '../../core/services/crash_logger.dart';
+import '../../core/services/debug_status.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/pdf_helper.dart';
 import '../../models/models.dart';
@@ -211,11 +212,16 @@ class _SalesScreenState extends State<SalesScreen> {
                 onPressed: _selectedPaymentMethod == 'cash' && paid < net ? null : () async {
                   await CrashLogger.checkpoint('sales.confirm_dialog.before_navigator_pop');
                   if (!dialogContext.mounted) return;
-                  Navigator.of(dialogContext, rootNavigator: true).pop({
-                    'discount': safeDiscount,
-                    'paid': _selectedPaymentMethod == 'cash' ? paid : net,
-                    'change': _selectedPaymentMethod == 'cash' ? change : 0,
-                  });
+                  final Map<String, double> checkoutResult = <String, double>{
+                    'discount': safeDiscount.toDouble(),
+                    'paid': (_selectedPaymentMethod == 'cash' ? paid : net).toDouble(),
+                    'change': (_selectedPaymentMethod == 'cash' ? change : 0.0).toDouble(),
+                  };
+                  try {
+                    Navigator.of(dialogContext, rootNavigator: true).pop(checkoutResult);
+                  } catch (error) {
+                    debugStatus.value = 'sales.confirm_dialog.pop.error: $error';
+                  }
                 },
                 child: const Text('إتمام البيع'),
               ),
