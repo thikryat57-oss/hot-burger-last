@@ -42,7 +42,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 });
               }
             } catch (e) {
-              if (c.mounted) ScaffoldMessenger.of(c).showSnackBar(SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))));
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))),
+                );
+              }
             }
           }, child: const Text('حفظ')),
         ],
