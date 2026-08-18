@@ -274,7 +274,6 @@ InvoiceSummaryResult summarizeInvoices(
     grouped.putIfAbsent(invoiceId, () => []).add(FinancialLineItem.fromRow(row));
   }
 
-  var expensesRemainingUnits = _clean(expensesTotal);
   final results = <int, InvoiceFinancials>{};
   for (final entry in invoices.entries) {
     final id = entry.key;
