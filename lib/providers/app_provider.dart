@@ -3,6 +3,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import '../core/database/database_helper.dart';
+import '../core/utils/financial_calculator.dart';
 import '../models/models.dart';
 
 class AppProvider extends ChangeNotifier {
@@ -946,47 +947,66 @@ class AppProvider extends ChangeNotifier {
   }
 
   // Reports
-  Future<Map<String, dynamic>> getDailyReport(String date) async {
-    final salesResult = await _db!.rawQuery(
-      "SELECT COALESCE(SUM(total_amount), 0) as total, COUNT(*) as count FROM invoices WHERE DATE(created_at) = ? AND status NOT IN ('cancelled','returned')",
+    Future<Map<String, dynamic>> getDailyReport(String date) async {
+    _db ??= await DatabaseHelper.database;
+    final invoiceRows = await _db!.rawQuery(
+      "SELECT id, invoice_number, status, created_at, subtotal_amount, discount_amount, total_amount, payment_method FROM invoices WHERE DATE(created_at) = ? AND status NOT IN ('cancelled','returned')",
+      [date],
+    );
+    final itemRows = await _db!.rawQuery(
+      "SELECT invoice_id, product_id, product_name, quantity, price, total, cost_snapshot, unit_profit, total_profit FROM invoice_items WHERE DATE(created_at) = ?",
       [date],
     );
     final expenseResult = await _db!.rawQuery(
       'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date = ?',
       [date],
     );
-
-    final totalSales = (salesResult.first['total'] is num) ? (salesResult.first['total'] as num).toDouble() : 0.0;
-    final invoiceCount = (salesResult.first['count'] is num) ? salesResult.first['count'] as int : 0;
-    final totalExpenses = (expenseResult.first['total'] is num) ? (expenseResult.first['total'] as num).toDouble() : 0.0;
-
+    final summary = summarizeInvoices(invoiceRows, itemRows, expensesTotal: (expenseResult.first['total'] as num).toDouble());
+    final agg = aggregateSummary(summary.invoices.values.toList(), expensesTotal: (expenseResult.first['total'] as num).toDouble());
+    final totalExpenses = agg.expenses;
+    // netProfit = discounted gross profit minus expenses (COGS now deducted).
     return {
-      'totalSales': totalSales,
-      'invoiceCount': invoiceCount,
+      'totalSales': agg.netRevenue,
+      'invoiceCount': agg.invoiceCount,
       'totalExpenses': totalExpenses,
-      'netProfit': totalSales - totalExpenses,
+      'netProfit': agg.grossProfitWithFallback - totalExpenses,
+      'grossSales': agg.grossSales,
+      'discountTotal': agg.discountTotal,
+      'cogs': agg.cogs,
+      'cogsFallback': agg.cogsWithFallback,
+      'grossProfit': agg.grossProfitWithFallback,
     };
   }
 
-  Future<Map<String, dynamic>> getMonthlyReport(int year, int month) async {
-    final salesResult = await _db!.rawQuery(
-      "SELECT COALESCE(SUM(total_amount), 0) as total, COUNT(*) as count FROM invoices WHERE strftime('%Y', created_at) = ? AND strftime('%m', created_at) = ? AND status NOT IN ('cancelled','returned')",
-      ['${year}', month.toString().padLeft(2, '0')],
+    Future<Map<String, dynamic>> getMonthlyReport(int year, int month) async {
+    _db ??= await DatabaseHelper.database;
+    final y = '${year}';
+    final m = month.toString().padLeft(2, '0');
+    final invoiceRows = await _db!.rawQuery(
+      "SELECT id, invoice_number, status, created_at, subtotal_amount, discount_amount, total_amount, payment_method FROM invoices WHERE strftime('%Y', created_at) = ? AND strftime('%m', created_at) = ? AND status NOT IN ('cancelled','returned')",
+      [y, m],
+    );
+    final itemRows = await _db!.rawQuery(
+      "SELECT invoice_id, product_id, product_name, quantity, price, total, cost_snapshot, unit_profit, total_profit FROM invoice_items WHERE strftime('%Y', created_at) = ? AND strftime('%m', created_at) = ?",
+      [y, m],
     );
     final expenseResult = await _db!.rawQuery(
       'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE strftime(\'%Y\', date) = ? AND strftime(\'%m\', date) = ?',
-      ['${year}', month.toString().padLeft(2, '0')],
+      [y, m],
     );
-
-    final totalSales = (salesResult.first['total'] is num) ? (salesResult.first['total'] as num).toDouble() : 0.0;
-    final invoiceCount = (salesResult.first['count'] is num) ? salesResult.first['count'] as int : 0;
-    final totalExpenses = (expenseResult.first['total'] is num) ? (expenseResult.first['total'] as num).toDouble() : 0.0;
-
+    final summary = summarizeInvoices(invoiceRows, itemRows, expensesTotal: (expenseResult.first['total'] as num).toDouble());
+    final agg = aggregateSummary(summary.invoices.values.toList(), expensesTotal: (expenseResult.first['total'] as num).toDouble());
+    final totalExpenses = agg.expenses;
     return {
-      'totalSales': totalSales,
-      'invoiceCount': invoiceCount,
+      'totalSales': agg.netRevenue,
+      'invoiceCount': agg.invoiceCount,
       'totalExpenses': totalExpenses,
-      'netProfit': totalSales - totalExpenses,
+      'netProfit': agg.grossProfitWithFallback - totalExpenses,
+      'grossSales': agg.grossSales,
+      'discountTotal': agg.discountTotal,
+      'cogs': agg.cogs,
+      'cogsFallback': agg.cogsWithFallback,
+      'grossProfit': agg.grossProfitWithFallback,
     };
   }
 
@@ -1044,15 +1064,22 @@ class AppProvider extends ChangeNotifier {
     final startStr = start.toIso8601String().substring(0, 10);
     final endStr = end.toIso8601String().substring(0, 10);
 
-    // Total Revenue
-    final revenueResult = await _db!.rawQuery(
-      "SELECT COALESCE(SUM(total_amount), 0) as total FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')",
+    // Total Revenue (net of discount) and gross sales, via the unified financial layer.
+    final invoiceRows = await _db!.rawQuery(
+      "SELECT id, invoice_number, status, created_at, subtotal_amount, discount_amount, total_amount, payment_method FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')",
       [startStr, endStr],
     );
-    final totalRevenue = (revenueResult.first['total'] is num) ? (revenueResult.first['total'] as num).toDouble() : 0.0;
+    final itemRows = await _db!.rawQuery(
+      "SELECT invoice_id, product_id, product_name, quantity, price, total, cost_snapshot, unit_profit, total_profit FROM invoice_items WHERE DATE(created_at) BETWEEN ? AND ?",
+      [startStr, endStr],
+    );
+    final summary = summarizeInvoices(invoiceRows, itemRows);
+    final agg = aggregateSummary(summary.invoices.values.toList());
+    final netRevenue = agg.netRevenue;
+    final grossSales = agg.grossSales;
+    final discountTotal = agg.discountTotal;
 
     // COGS: based on frozen cost_snapshot at time of sale (historical data never changes)
-    // Fallback: older invoices (before snapshot existed) fall back to current cost calculation
     final cogsResult = await _db!.rawQuery('''
       SELECT COALESCE(
         SUM(
@@ -1075,8 +1102,9 @@ class AppProvider extends ChangeNotifier {
     final cogs = (cogsResult.first['cogs'] is num) ? (cogsResult.first['cogs'] as num).toDouble() : 0.0;
     final grossProfitFromItems = (cogsResult.first['total_profit'] is num) ? (cogsResult.first['total_profit'] as num).toDouble() : 0.0;
 
-    final grossProfit = totalRevenue - cogs;
-    final profitMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0.0;
+    // Gross profit: discount-allocated revenue minus COGS.
+    final grossProfit = netRevenue - cogs;
+    final profitMargin = netRevenue > 0 ? (grossProfit / netRevenue) * 100 : 0.0;
 
     // Total Expenses
     final expenseResult = await _db!.rawQuery(
@@ -1088,13 +1116,16 @@ class AppProvider extends ChangeNotifier {
     final netProfit = grossProfit - totalExpenses;
 
     return {
-      'totalRevenue': totalRevenue,
+      'totalRevenue': netRevenue,
+      'grossSales': grossSales,
+      'discountTotal': discountTotal,
       'cogs': cogs,
+      'cogsFallback': agg.cogsWithFallback,
       'grossProfit': grossProfit,
       'grossProfitFromSnapshot': grossProfitFromItems,
       'profitMargin': profitMargin,
       'totalExpenses': totalExpenses,
-      'netProfit': netProfit,
+      'netProfit': grossProfit - totalExpenses,
     };
   }
 
@@ -1107,6 +1138,19 @@ class AppProvider extends ChangeNotifier {
     final endStr = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
     final result = await _db!.rawQuery(
       'SELECT DATE(created_at) as d, COALESCE(SUM(total_amount),0) as total, COUNT(*) as count '
+      "FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned') GROUP BY DATE(created_at) ORDER BY d ASC",
+      [startStr, endStr],
+    );
+    return result;
+  }
+
+  /// Daily net revenue series computed by the unified financial layer (net of discount).
+  Future<List<Map<String, dynamic>>> getDashboardDailyNetSales({required DateTime start, required DateTime end}) async {
+    _db ??= await DatabaseHelper.database;
+    final startStr = '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
+    final endStr = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
+    final result = await _db!.rawQuery(
+      'SELECT DATE(created_at) as d, COALESCE(SUM(total_amount),0) as total, COALESCE(SUM(subtotal_amount),0) as gross, COALESCE(SUM(discount_amount),0) as discount, COUNT(*) as count '
       "FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned') GROUP BY DATE(created_at) ORDER BY d ASC",
       [startStr, endStr],
     );
@@ -1126,17 +1170,23 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
-  /// Top N most profitable products based on saved total_profit (historical).
+  /// Top N most profitable products with the discount allocated pro rata via the unified layer.
   Future<List<Map<String, dynamic>>> getTopProductsByProfit({required DateTime start, required DateTime end, int limit = 5}) async {
     _db ??= await DatabaseHelper.database;
     final startStr = '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
     final endStr = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
-    return await _db!.rawQuery(
-      'SELECT product_name, SUM(quantity) as qty, COALESCE(SUM(total_profit),0) as profit '
-      "FROM invoice_items ii INNER JOIN invoices inv ON inv.id = ii.invoice_id WHERE DATE(ii.created_at) BETWEEN ? AND ? AND inv.status NOT IN ('cancelled','returned') "
-      'GROUP BY product_id ORDER BY profit DESC LIMIT ?',
-      [startStr, endStr, limit],
+    final invoiceRows = await _db!.rawQuery(
+      "SELECT id, invoice_number, status, created_at, subtotal_amount, discount_amount, total_amount, payment_method FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')",
+      [startStr, endStr],
     );
+    final itemRows = await _db!.rawQuery(
+      "SELECT invoice_id, product_id, product_name, quantity, price, total, cost_snapshot, unit_profit, total_profit FROM invoice_items WHERE DATE(created_at) BETWEEN ? AND ?",
+      [startStr, endStr],
+    );
+    final summary = summarizeInvoices(invoiceRows, itemRows);
+    return topProductsByDiscountedProfit(summary.invoices.values.toList(), limit: limit)
+      .map((m) => <String, dynamic>{'product_name': m['product_name'], 'qty': m['qty'], 'profit': m['discountedProfit']})
+      .toList();
   }
 
   /// Total expenses in the period, grouped by expense name (reuse Expense.name as category).
@@ -1182,16 +1232,28 @@ class AppProvider extends ChangeNotifier {
       WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')
     ''', [s, e]);
 
-    final profit = await _db!.rawQuery('''
-      SELECT COALESCE(SUM(ii.total_profit),0) AS gross_profit
-      FROM invoice_items ii INNER JOIN invoices i ON i.id = ii.invoice_id
-      WHERE DATE(ii.created_at) BETWEEN ? AND ? AND i.status NOT IN ('cancelled','returned')
+    final invoiceRows = await _db!.rawQuery('''
+      SELECT id, invoice_number, status, created_at, subtotal_amount, discount_amount, total_amount, payment_method
+      FROM invoices
+      WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')
     ''', [s, e]);
 
-    final expenses = await _db!.rawQuery(
+    final itemRows = await _db!.rawQuery('''
+      SELECT invoice_id, product_id, product_name, quantity, price, total, cost_snapshot, unit_profit, total_profit
+      FROM invoice_items
+      WHERE DATE(created_at) BETWEEN ? AND ?
+    ''', [s, e]);
+
+    final expensesResult = await _db!.rawQuery(
       'SELECT COALESCE(SUM(amount),0) AS total FROM expenses WHERE date BETWEEN ? AND ?',
       [s, e],
     );
+
+    final summary = summarizeInvoices(invoiceRows, itemRows);
+    final totalExpenses = (expensesResult.first['total'] as num?)?.toDouble() ?? 0;
+    final agg = aggregateSummary(summary.invoices.values.toList(), expensesTotal: totalExpenses);
+
+    final grossProfit = agg.grossProfitWithFallback;
 
     final hourly = await _db!.rawQuery('''
       SELECT CAST(strftime('%H', created_at) AS INTEGER) AS hour,
@@ -1203,9 +1265,9 @@ class AppProvider extends ChangeNotifier {
     ''', [s, e]);
 
     final payment = [
-      {'name': 'نقدًا', 'amount': (sales.first['cash'] as num?)?.toDouble() ?? 0},
-      {'name': 'بطاقة', 'amount': (sales.first['card'] as num?)?.toDouble() ?? 0},
-      {'name': 'تحويل', 'amount': (sales.first['transfer'] as num?)?.toDouble() ?? 0},
+      {'name': 'نقدًا', 'amount': agg.cashTotal},
+      {'name': 'بطاقة', 'amount': agg.cardTotal},
+      {'name': 'تحويل', 'amount': agg.bankTotal},
     ];
 
     final customers = await _db!.rawQuery('''
@@ -1223,20 +1285,19 @@ class AppProvider extends ChangeNotifier {
     ''');
 
     final salesValue = (sales.first['sales'] as num?)?.toDouble() ?? 0;
-    final grossProfit = (profit.first['gross_profit'] as num?)?.toDouble() ?? 0;
-    final totalExpenses = (expenses.first['total'] as num?)?.toDouble() ?? 0;
     final invoiceCount = (sales.first['invoices'] as num?)?.toInt() ?? 0;
 
     return {
-      'sales': salesValue,
-      'subtotal': (sales.first['subtotal'] as num?)?.toDouble() ?? 0,
-      'discounts': (sales.first['discounts'] as num?)?.toDouble() ?? 0,
+      'sales': agg.netRevenue,
+      'subtotal': agg.grossSales,
+      'discounts': agg.discountTotal,
       'invoices': invoiceCount,
-      'averageTicket': invoiceCount == 0 ? 0.0 : salesValue / invoiceCount,
+      'averageTicket': invoiceCount == 0 ? 0.0 : agg.netRevenue / invoiceCount,
       'grossProfit': grossProfit,
       'expenses': totalExpenses,
-      'netProfit': grossProfit - totalExpenses,
-      'margin': salesValue == 0 ? 0.0 : (grossProfit / salesValue) * 100,
+      'netProfit': agg.netProfitWithFallback,
+      'margin': agg.netRevenue == 0 ? 0.0 : (grossProfit / agg.netRevenue) * 100,
+      'cogs': agg.cogsWithFallback,
       'payment': payment,
       'hourly': hourly,
       'customers': customers,
