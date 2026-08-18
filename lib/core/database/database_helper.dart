@@ -373,6 +373,7 @@ class DatabaseHelper {
       await db.execute('CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone)');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_customer_points_invoice ON customer_points_log(invoice_id)');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_audit_invoice_action ON invoice_audit_log(invoice_id, action_type)');
+      await db.execute('CREATE INDEX IF NOT EXISTS idx_product_ingredients_ingredient ON product_ingredients(ingredient_id)');
     }
   }
 
@@ -570,6 +571,7 @@ class DatabaseHelper {
     await db.execute('CREATE INDEX IF NOT EXISTS idx_inventory_quantity ON inventory(quantity, min_quantity)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_inventory_audit_ingredient_date ON inventory_audit_log(ingredient_id, action_date)');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_product_ingredients_product ON product_ingredients(product_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_product_ingredients_ingredient ON product_ingredients(ingredient_id)');
   }
 
   // Creates v6 tables: inventory audit trail log
@@ -995,30 +997,36 @@ class DatabaseHelper {
 
   /// Recalculate product costs for all products using the given ingredient (called after a purchase updates cost_price)
   static Future<void> recalculateProductCostsForIngredient(int ingredientId) async {
-    final productIds = await getProductIdsByIngredient(ingredientId);
     final db = await database;
-    for (final productId in productIds) {
-      // Calculate new cost: sum of (quantity × current cost_price) from product_ingredients
-      final links = await db.query(
+    await db.transaction((txn) async {
+      final productIds = await txn.query(
         'product_ingredients',
-        columns: ['ingredient_id', 'quantity'],
-        where: 'product_id = ?',
-        whereArgs: [productId],
+        columns: ['product_id'],
+        where: 'ingredient_id = ?',
+        whereArgs: [ingredientId],
       );
-      double newCost = 0;
-      for (final link in links) {
-        final ingId = link['ingredient_id'] as int;
-        final qty = (link['quantity'] as num).toDouble();
-        final ingData = await db.query('inventory', columns: ['cost_price'], where: 'id = ?', whereArgs: [ingId]);
-        if (ingData.isNotEmpty) {
-          newCost += qty * (ingData.first['cost_price'] as num).toDouble();
-        }
+      final now = DateTime.now().toIso8601String();
+      for (final row in productIds) {
+        final productId = row['product_id'] as int;
+        final links = await txn.rawQuery('''
+          SELECT pi.quantity, inv.cost_price
+          FROM product_ingredients pi
+          INNER JOIN inventory inv ON pi.ingredient_id = inv.id
+          WHERE pi.product_id = ?
+        ''', [productId]);
+        final newCost = links.fold<double>(0, (sum, link) {
+          final quantity = (link['quantity'] as num).toDouble();
+          final cost = (link['cost_price'] as num).toDouble();
+          return sum + quantity * cost;
+        });
+        await txn.update(
+          'products',
+          {'cost': newCost, 'updated_at': now},
+          where: 'id = ?',
+          whereArgs: [productId],
+        );
       }
-      await db.rawUpdate(
-        'UPDATE products SET cost = ?, updated_at = ? WHERE id = ?',
-        [newCost, DateTime.now().toIso8601String(), productId],
-      );
-    }
+    });
   }
 
   static Future<List<Map<String, dynamic>>> getPurchaseInvoices({int? supplierId}) async {

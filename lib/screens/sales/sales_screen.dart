@@ -458,6 +458,7 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
     if (!mounted) return;
     await showModalBottomSheet(
       context: context,
+      useRootNavigator: true,
       isScrollControlled: true,
       showDragHandle: true,
       builder: (sheetContext) => SafeArea(
@@ -510,7 +511,11 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
                                         _selectedPaymentMethod = data['order']['payment_method']?.toString() ?? 'cash';
                                       });
                                       await provider.deletePendingOrder(o['id'] as int);
-                                      if (sheetContext.mounted) Navigator.pop(sheetContext);
+                                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                                        if (sheetContext.mounted) {
+                                          Navigator.of(sheetContext, rootNavigator: true).pop();
+                                        }
+                                      });
                                     },
                                   ),
                                   IconButton(
@@ -518,8 +523,11 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
                                     icon: const Icon(Icons.delete_outline, color: AppTheme.errorColor),
                                     onPressed: () async {
                                       await provider.deletePendingOrder(o['id'] as int);
-                                      if (sheetContext.mounted) Navigator.pop(sheetContext);
-                                      if (mounted) _showPendingOrders();
+                                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                                        if (!sheetContext.mounted) return;
+                                        Navigator.of(sheetContext, rootNavigator: true).pop();
+                                        if (mounted) _showPendingOrders();
+                                      });
                                     },
                                   ),
                                 ],
