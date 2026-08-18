@@ -29,9 +29,11 @@ class PdfHelper {
       pw.Page(
         pageFormat: PdfPageFormat(80 * PdfPageFormat.mm, 200 * PdfPageFormat.mm, marginAll: 4 * PdfPageFormat.mm),
         build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.center,
-            children: [
+          return pw.Directionality(
+            textDirection: pw.TextDirection.rtl,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
               // Restaurant name
               pw.Text(
                 'Hot Burger',
@@ -228,7 +230,8 @@ class PdfHelper {
                 style: pw.TextStyle(fontSize: 7),
                 textAlign: pw.TextAlign.center,
               ),
-            ],
+              ],
+            ),
           );
         },
       ),
@@ -268,7 +271,11 @@ class PdfHelper {
         margin: const pw.EdgeInsets.all(10 * PdfPageFormat.mm),
         build: (pw.Context context) {
           return [
-            pw.Text('Hot Burger', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
+            pw.Directionality(
+              textDirection: pw.TextDirection.rtl,
+              child: pw.Column(
+                children: [
+                  pw.Text('Hot Burger', style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
             pw.SizedBox(height: 4),
             pw.Text('تقرير سجل حركات المخزون', style: pw.TextStyle(fontSize: 13), textAlign: pw.TextAlign.center),
             pw.SizedBox(height: 4),
@@ -304,6 +311,9 @@ class PdfHelper {
                   );
                 }),
               ],
+                  ),
+                ],
+              ),
             ),
           ];
         },
@@ -340,9 +350,11 @@ class PdfHelper {
       pw.Page(
         pageFormat: PdfPageFormat(80 * PdfPageFormat.mm, 150 * PdfPageFormat.mm, marginAll: 4 * PdfPageFormat.mm),
         build: (pw.Context context) {
-          return pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.center,
-            children: [
+          return pw.Directionality(
+            textDirection: pw.TextDirection.rtl,
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.center,
+              children: [
               pw.Text('Hot Burger', style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
               pw.SizedBox(height: 4),
               pw.Text('تقرير تقفيل الوردية', style: pw.TextStyle(fontSize: 11), textAlign: pw.TextAlign.center),
@@ -431,7 +443,8 @@ class PdfHelper {
               pw.Text('شكراً لزيارتكم', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold), textAlign: pw.TextAlign.center),
               pw.SizedBox(height: 2),
               pw.Text('Hot Burger © ${DateTime.now().year}', style: pw.TextStyle(fontSize: 7), textAlign: pw.TextAlign.center),
-            ],
+              ],
+            ),
           );
         },
       ),

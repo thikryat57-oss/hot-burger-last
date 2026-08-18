@@ -18,8 +18,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
     final phone = TextEditingController();
     final email = TextEditingController();
     final result = await showDialog<bool>(
+      useRootNavigator: true,
       context: context,
-      builder: (c) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('عميل جديد'),
         content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
           TextField(controller: name, autofocus: true, decoration: const InputDecoration(labelText: 'اسم العميل', prefixIcon: Icon(Icons.person_outline))),
@@ -29,11 +30,17 @@ class _CustomersScreenState extends State<CustomersScreen> {
           TextField(controller: email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'البريد الإلكتروني', prefixIcon: Icon(Icons.email_outlined))),
         ])),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(c), child: const Text('إلغاء')),
+          TextButton(onPressed: () => Navigator.of(dialogContext, rootNavigator: true).pop(), child: const Text('إلغاء')),
           FilledButton(onPressed: () async {
             try {
               await context.read<AppProvider>().addCustomer(name: name.text, phone: phone.text, email: email.text);
-              if (c.mounted) Navigator.pop(c, true);
+              if (dialogContext.mounted) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext, rootNavigator: true).pop(true);
+                  }
+                });
+              }
             } catch (e) {
               if (c.mounted) ScaffoldMessenger.of(c).showSnackBar(SnackBar(content: Text(e.toString().replaceAll('Exception: ', ''))));
             }

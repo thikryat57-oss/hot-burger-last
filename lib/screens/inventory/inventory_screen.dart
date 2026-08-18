@@ -206,6 +206,7 @@ class _InventoryScreenState extends State<_InventoryList> {
     String selectedUnit = 'حبة';
 
     showDialog(
+      useRootNavigator: true,
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
@@ -271,7 +272,11 @@ class _InventoryScreenState extends State<_InventoryList> {
                     costPrice: double.tryParse(costPriceController.text) ?? 0,
                   ));
                   if (mounted) {
-                    Navigator.pop(dialogContext);
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (dialogContext.mounted) {
+                        Navigator.of(dialogContext, rootNavigator: true).pop();
+                      }
+                    });
                     _loadData();
                   }
                 },
@@ -292,6 +297,7 @@ class _InventoryScreenState extends State<_InventoryList> {
     String selectedUnit = ingredient.unit;
 
     showDialog(
+      useRootNavigator: true,
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
@@ -358,7 +364,11 @@ class _InventoryScreenState extends State<_InventoryList> {
                     costPrice: double.tryParse(costPriceController.text) ?? 0,
                   ));
                   if (mounted) {
-                    Navigator.pop(dialogContext);
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (dialogContext.mounted) {
+                        Navigator.of(dialogContext, rootNavigator: true).pop();
+                      }
+                    });
                     _loadData();
                   }
                 },
@@ -376,6 +386,7 @@ class _InventoryScreenState extends State<_InventoryList> {
     final costController = TextEditingController();
 
     showDialog(
+      useRootNavigator: true,
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('تسجيل عملية شراء - ${ingredient.name}'),
@@ -422,7 +433,11 @@ class _InventoryScreenState extends State<_InventoryList> {
                 cost,
               );
               if (mounted) {
-                Navigator.pop(dialogContext);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (dialogContext.mounted) {
+                    Navigator.of(dialogContext, rootNavigator: true).pop();
+                  }
+                });
                 _loadData();
               }
             },
@@ -435,6 +450,7 @@ class _InventoryScreenState extends State<_InventoryList> {
 
   Future<void> _deleteIngredient(IngredientModel ingredient) async {
     final confirmed = await showDialog<bool>(
+      useRootNavigator: true,
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('حذف المادة الخام'),

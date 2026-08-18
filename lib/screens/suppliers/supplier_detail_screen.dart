@@ -194,6 +194,7 @@ class _SupplierDetailScreenState extends State<SupplierDetailScreen> {
     final dateController = TextEditingController(text: DateFormat('yyyy-MM-dd').format(DateTime.now()));
 
     showDialog(
+      useRootNavigator: true,
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('تسجيل دفعة للمورد'),
@@ -247,7 +248,11 @@ class _SupplierDetailScreenState extends State<SupplierDetailScreen> {
               
               await context.read<AppProvider>().addSupplierPayment(payment);
               if (context.mounted) {
-                Navigator.pop(context);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (context.mounted) {
+                    Navigator.of(context, rootNavigator: true).pop();
+                  }
+                });
                 _reloadData();
               }
             },

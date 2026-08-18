@@ -654,16 +654,16 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
     return Column(
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
             color: AppTheme.primaryColor.withOpacity(0.06),
             border: Border(bottom: BorderSide(color: AppTheme.primaryColor.withOpacity(0.10))),
           ),
           child: Row(
             children: [
-              const Icon(Icons.shopping_cart_rounded, size: 21, color: AppTheme.primaryColor),
-              const SizedBox(width: 8),
-              const Text('السلة', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
+              const Icon(Icons.shopping_cart_rounded, size: 19, color: AppTheme.primaryColor),
+              const SizedBox(width: 6),
+              const Text('السلة', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
               const Spacer(),
               if (_cart.isNotEmpty)
                 Container(
@@ -674,7 +674,7 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
                   ),
                   child: Text(
                     '${_cart.fold<int>(0, (sum, item) => sum + item.quantity)} قطعة',
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12, color: AppTheme.primaryColor),
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: AppTheme.primaryColor),
                   ),
                 ),
             ],
@@ -774,7 +774,10 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
                   },
                 ),
         ),
-        _buildCartSummary(),
+        Flexible(
+          fit: FlexFit.loose,
+          child: _buildCartSummary(),
+        ),
       ],
     );
   }
@@ -782,22 +785,25 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
   Widget _buildCartSummary() {
     final totalItems = _cart.fold<int>(0, (sum, item) => sum + item.quantity);
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+
       decoration: BoxDecoration(
         color: AppTheme.cardBackground,
         border: Border(top: BorderSide(color: AppTheme.primaryColor.withOpacity(0.12))),
         boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 12, offset: const Offset(0, -3))],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
             children: [
               const Expanded(child: Text('الإجمالي', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800))),
               Text('${_totalAmount.toStringAsFixed(2)} ج.س', style: const TextStyle(fontSize: 21, fontWeight: FontWeight.w900, color: AppTheme.primaryColor)),
             ],
           ),
-          if (_discountAmount > 0) ...[
+            if (_discountAmount > 0) ...[
             const SizedBox(height: 3),
             Row(
               children: [
@@ -806,8 +812,8 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
               ],
             ),
           ],
-          const SizedBox(height: 8),
-          Row(
+            const SizedBox(height: 5),
+            Row(
             children: [
               Expanded(
                 child: OutlinedButton.icon(
@@ -829,8 +835,8 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          SizedBox(
+            const SizedBox(height: 5),
+            SizedBox(
             height: 38,
             child: Row(
               children: [
@@ -842,23 +848,25 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
               ],
             ),
           ),
-          const SizedBox(height: 7),
-          SizedBox(
+            const SizedBox(height: 4),
+            SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
               onPressed: _cart.isEmpty || _isSavingInvoice ? null : _saveInvoice,
               icon: const Icon(Icons.check_circle_outline),
               label: Text(_isSavingInvoice ? 'جارٍ حفظ البيع...' : totalItems > 0 ? 'إتمام البيع • ${_totalAmount.toStringAsFixed(2)} ج.س' : 'إتمام البيع'),
               style: FilledButton.styleFrom(
-                  backgroundColor: AppTheme.successColor,
-                  disabledBackgroundColor: AppTheme.textHint.withOpacity(0.22),
-                  disabledForegroundColor: AppTheme.textSecondary,
-                  minimumSize: const Size.fromHeight(46),
+                backgroundColor: AppTheme.successColor,
+                disabledBackgroundColor: AppTheme.textHint.withOpacity(0.22),
+                disabledForegroundColor: AppTheme.textSecondary,
+                minimumSize: const Size.fromHeight(42),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
               ),
             ),
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -1043,7 +1051,8 @@ Widget _summaryRow(String label, double value, {bool emphasized = false}) => Pad
                 final products = _buildProductsGrid();
                 final cart = _buildCartPanel();
                 if (compact) {
-                  final cartFlex = _cart.isEmpty ? 3 : 6;
+                  // Give the cart a larger fixed share so its item list never collapses.
+                  final cartFlex = _cart.isEmpty ? 3 : 7;
                   return Column(
                     children: [
                       Expanded(flex: 10 - cartFlex, child: products),

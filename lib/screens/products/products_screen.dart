@@ -41,6 +41,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     int? _selectedCategoryId;
 
     showDialog(
+      useRootNavigator: true,
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
@@ -107,7 +108,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         categoryId: _selectedCategoryId,
                       ));
                       if (mounted) {
-                        Navigator.pop(context);
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (context.mounted) {
+                            Navigator.of(context, rootNavigator: true).pop();
+                          }
+                        });
                         _loadProducts();
                       }
                     },
@@ -131,6 +136,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
     bool _editIsAvailable = product.isAvailable;
 
     showDialog(
+      useRootNavigator: true,
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
@@ -207,7 +213,11 @@ class _ProductsScreenState extends State<ProductsScreen> {
                         isAvailable: _editIsAvailable,
                       ));
                       if (mounted) {
-                        Navigator.pop(context);
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (context.mounted) {
+                            Navigator.of(context, rootNavigator: true).pop();
+                          }
+                        });
                         _loadProducts();
                       }
                     },
@@ -225,6 +235,7 @@ class _ProductsScreenState extends State<ProductsScreen> {
   Future<void> _deleteProduct(Product product) async {
     final appProvider = context.read<AppProvider>();
     final confirmed = await showDialog<bool>(
+      useRootNavigator: true,
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('حذف المنتج'),

@@ -41,6 +41,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     final appProvider = context.read<AppProvider>();
 
     showDialog(
+      useRootNavigator: true,
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('إضافة مصروف'),
@@ -103,7 +104,11 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                 notes: notesController.text.isEmpty ? null : notesController.text,
               ));
               if (mounted) {
-                Navigator.pop(context);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (context.mounted) {
+                    Navigator.of(context, rootNavigator: true).pop();
+                  }
+                });
                 _loadExpenses();
               }
             },
@@ -122,6 +127,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     final appProvider = context.read<AppProvider>();
 
     showDialog(
+      useRootNavigator: true,
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('تعديل المصروف'),
@@ -185,7 +191,11 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                 notes: notesController.text.isEmpty ? null : notesController.text,
               ));
               if (mounted) {
-                Navigator.pop(context);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (context.mounted) {
+                    Navigator.of(context, rootNavigator: true).pop();
+                  }
+                });
                 _loadExpenses();
               }
             },
@@ -199,6 +209,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   Future<void> _deleteExpense(Expense expense) async {
     final appProvider = context.read<AppProvider>();
     final confirmed = await showDialog<bool>(
+      useRootNavigator: true,
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('حذف المصروف'),

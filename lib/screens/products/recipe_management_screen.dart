@@ -73,6 +73,7 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
     final quantityController = TextEditingController(text: '1');
 
     showDialog(
+      useRootNavigator: true,
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) {
@@ -136,7 +137,11 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
                       );
 
                   if (mounted) {
-                    Navigator.pop(dialogContext);
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (dialogContext.mounted) {
+                        Navigator.of(dialogContext, rootNavigator: true).pop();
+                      }
+                    });
                     _loadData();
                   }
                 },
@@ -154,6 +159,7 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
         TextEditingController(text: (item['quantity'] as num).toString());
 
     showDialog(
+      useRootNavigator: true,
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: Text('تعديل الكمية - ${item['ingredient_name']}'),
@@ -206,6 +212,7 @@ class _RecipeManagementScreenState extends State<RecipeManagementScreen> {
 
   Future<void> _deleteIngredient(Map<String, dynamic> item) async {
     final confirmed = await showDialog<bool>(
+      useRootNavigator: true,
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('حذف من الوصفة'),

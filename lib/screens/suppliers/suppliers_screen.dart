@@ -126,6 +126,7 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
     final notesController = TextEditingController();
 
     showDialog(
+      useRootNavigator: true,
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('إضافة مورد جديد'),
@@ -170,7 +171,11 @@ class _SuppliersScreenState extends State<SuppliersScreen> {
               
               await context.read<AppProvider>().addSupplier(supplier);
               if (context.mounted) {
-                Navigator.pop(context);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (context.mounted) {
+                    Navigator.of(context, rootNavigator: true).pop();
+                  }
+                });
                 _reloadSuppliers();
               }
             },

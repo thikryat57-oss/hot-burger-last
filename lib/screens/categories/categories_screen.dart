@@ -39,6 +39,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     final appProvider = context.read<AppProvider>();
 
     showDialog(
+      useRootNavigator: true,
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
@@ -86,7 +87,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     isActive: isActive,
                   ));
                   if (mounted) {
-                    Navigator.pop(context);
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (context.mounted) {
+                        Navigator.of(context, rootNavigator: true).pop();
+                      }
+                    });
                     _loadCategories();
                   }
                 },
@@ -106,6 +111,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
     final appProvider = context.read<AppProvider>();
 
     showDialog(
+      useRootNavigator: true,
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
@@ -154,7 +160,11 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
                     isActive: isActive,
                   ));
                   if (mounted) {
-                    Navigator.pop(context);
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (context.mounted) {
+                        Navigator.of(context, rootNavigator: true).pop();
+                      }
+                    });
                     _loadCategories();
                   }
                 },
@@ -170,6 +180,7 @@ class _CategoriesScreenState extends State<CategoriesScreen> {
   Future<void> _deleteCategory(Category category) async {
     final appProvider = context.read<AppProvider>();
     final confirmed = await showDialog<bool>(
+      useRootNavigator: true,
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('حذف التصنيف'),
