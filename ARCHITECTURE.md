@@ -29,7 +29,7 @@ The runtime starts in `lib/main.dart`. The application initializes Flutter bindi
 | Kitchen display | `screens/kitchen_display_screen.dart` | Displays completed invoices that have active kitchen states and advances them through `new → preparing → ready → delivered`. |
 | Reports and analytics | `screens/reports/reports_screen.dart`, `profit_report_screen.dart`, `shift_report_screen.dart`, `analytics/business_intelligence_screen.dart` | Produces operational, profit/loss, shift, and business-intelligence summaries from invoice, expense, inventory, and shift data. |
 | Backup | `screens/backup/backup_screen.dart`, `core/utils/backup_helper.dart` | Exports and imports the local SQLite database and related backup data. |
-| More/diagnostics | `screens/more/more_screen.dart`, `crash_log_screen.dart` | Provides secondary navigation, settings-style actions, and the current diagnostic crash-log viewer. Diagnostic removal is a release-phase task, not part of the data model. |
+| More/administration | `screens/more/more_screen.dart` | Provides secondary navigation, settings-style actions, reports, backup, and administration tools. Temporary crash/status diagnostics are excluded from the release UI. |
 | PDF rendering | `core/utils/pdf_helper.dart` | Generates receipts and inventory/shift reports using embedded Noto Arabic fonts and RTL directionality. |
 
 ## 3. State and navigation model
@@ -133,8 +133,8 @@ The application is Arabic-first and RTL. PDF output embeds Noto Arabic fonts and
 
 ## 8. Known operational risks for the regression and release audit
 
-The highest-risk areas are route closure after provider notifications, stale data in screens retained by the home tab structure, variable-height cart/payment layouts, migration compatibility across all database versions, and transaction completeness for sales/purchases/returns/voids. The release checklist must also remove temporary crash/status diagnostics only after a final diagnostic build has passed, then run clean analysis and release packaging in CI.
+The highest-risk areas are route closure after provider notifications, stale data in screens retained by the home tab structure, variable-height cart/payment layouts, migration compatibility across all database versions, and transaction completeness for sales/purchases/returns/voids. The diagnostic build passed in CI before the temporary crash/status instrumentation was removed. The release workflow now runs clean analysis and split-per-ABI packaging in CI.
 
 ## 9. Verification scope
 
-This document describes the implementation observed in the current `lib` tree. It is paired with the regression audit, provider/database review, and CI QA results produced during the current engineering pass. Any item not executable in the sandbox must be validated through the GitHub Actions workflow or a real Android device before production distribution.
+This document describes the implementation observed in the current `lib` tree. It is paired with the regression audit, provider/database review, and CI QA results produced during the current engineering pass. The final release artifact must be validated through the GitHub Actions workflow and on a real Android device before production distribution.
