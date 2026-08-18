@@ -774,7 +774,8 @@ class DatabaseHelper {
     final db = await database;
     return await db.rawQuery('''
       SELECT pi.id, pi.product_id, pi.ingredient_id, pi.quantity,
-             inv.name AS ingredient_name, inv.unit, inv.quantity AS current_stock
+             inv.name AS ingredient_name, inv.unit, inv.quantity AS current_stock,
+             inv.cost_price
       FROM product_ingredients pi
       INNER JOIN inventory inv ON pi.ingredient_id = inv.id
       WHERE pi.product_id = ?

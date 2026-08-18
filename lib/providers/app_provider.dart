@@ -307,7 +307,9 @@ class AppProvider extends ChangeNotifier {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
     final now = DateTime.now().toIso8601String();
     final result = await _db!.insert('categories', {
-      ...category.toMap(),
+      'name': category.name,
+      'description': category.description,
+      'is_active': category.isActive ? 1 : 0,
       'created_at': now,
       'updated_at': now,
     });
@@ -323,7 +325,9 @@ class AppProvider extends ChangeNotifier {
   Future<int> updateCategory(Category category) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
     final result = await _db!.update('categories', {
-      ...category.toMap(),
+      'name': category.name,
+      'description': category.description,
+      'is_active': category.isActive ? 1 : 0,
       'updated_at': DateTime.now().toIso8601String(),
     }, where: 'id = ?', whereArgs: [category.id]);
     notifyListeners();
@@ -342,7 +346,13 @@ class AppProvider extends ChangeNotifier {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
     final now = DateTime.now().toIso8601String();
     final result = await _db!.insert('products', {
-      ...product.toMap(),
+      'name': product.name,
+      'category_id': product.categoryId,
+      'price': product.price,
+      'cost': product.cost,
+      'description': product.description,
+      'image_path': product.imagePath,
+      'is_available': product.isAvailable ? 1 : 0,
       'created_at': now,
       'updated_at': now,
     });
@@ -360,7 +370,13 @@ class AppProvider extends ChangeNotifier {
   Future<int> updateProduct(Product product) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
     final result = await _db!.update('products', {
-      ...product.toMap(),
+      'name': product.name,
+      'category_id': product.categoryId,
+      'price': product.price,
+      'cost': product.cost,
+      'description': product.description,
+      'image_path': product.imagePath,
+      'is_available': product.isAvailable ? 1 : 0,
       'updated_at': DateTime.now().toIso8601String(),
     }, where: 'id = ?', whereArgs: [product.id]);
     notifyListeners();
@@ -470,7 +486,14 @@ class AppProvider extends ChangeNotifier {
     if (!isLoggedIn) throw Exception('يجب تسجيل الدخول أولاً');
     if (customer.name.trim().isEmpty) throw Exception('اسم العميل مطلوب');
     final result = await _db!.update('customers', {
-      ...customer.toMap(),
+      'name': customer.name,
+      'phone': customer.phone,
+      'email': customer.email,
+      'points': customer.points,
+      'total_spent': customer.totalSpent,
+      'visit_count': customer.visitCount,
+      'notes': customer.notes,
+      'is_active': customer.isActive ? 1 : 0,
       'updated_at': DateTime.now().toIso8601String(),
     }, where: 'id = ?', whereArgs: [customer.id]);
     notifyListeners();
@@ -895,7 +918,10 @@ class AppProvider extends ChangeNotifier {
   Future<int> addExpense(Expense expense) async {
     if (!canManageFinance()) throw Exception('هذه العملية متاحة للمدير فقط');
     final result = await _db!.insert('expenses', {
-      ...expense.toMap(),
+      'name': expense.name,
+      'amount': expense.amount,
+      'date': expense.date,
+      'notes': expense.notes,
       'created_at': DateTime.now().toIso8601String(),
     });
     notifyListeners();
@@ -910,7 +936,12 @@ class AppProvider extends ChangeNotifier {
 
   Future<int> updateExpense(Expense expense) async {
     if (!canManageFinance()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await _db!.update('expenses', expense.toMap(), where: 'id = ?', whereArgs: [expense.id]);
+    final result = await _db!.update('expenses', {
+      'name': expense.name,
+      'amount': expense.amount,
+      'date': expense.date,
+      'notes': expense.notes,
+    }, where: 'id = ?', whereArgs: [expense.id]);
     notifyListeners();
     return result;
   }
@@ -1282,7 +1313,14 @@ class AppProvider extends ChangeNotifier {
         );
       }
     }
-    final result = await DatabaseHelper.updateIngredient(ingredient.id!, ingredient.toMap());
+    final result = await DatabaseHelper.updateIngredient(ingredient.id!, {
+      'name': ingredient.name,
+      'quantity': ingredient.quantity,
+      'unit': ingredient.unit,
+      'min_quantity': ingredient.minQuantity,
+      'cost_price': ingredient.costPrice,
+      'updated_at': DateTime.now().toIso8601String(),
+    });
     notifyListeners();
     // Auto recalculate costs of products affected by this ingredient's price change
     await updateAffectedProductsCost(ingredient.id!);
@@ -1335,7 +1373,15 @@ class AppProvider extends ChangeNotifier {
 
   Future<int> addSupplier(Supplier supplier) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.insertSupplier(supplier.toMap());
+    final result = await DatabaseHelper.insertSupplier({
+      'name': supplier.name,
+      'phone': supplier.phone,
+      'address': supplier.address,
+      'notes': supplier.notes,
+      'balance': supplier.balance,
+      'created_at': supplier.createdAt ?? DateTime.now().toIso8601String(),
+      'updated_at': supplier.updatedAt ?? DateTime.now().toIso8601String(),
+    });
     notifyListeners();
     return result;
   }
@@ -1352,7 +1398,14 @@ class AppProvider extends ChangeNotifier {
 
   Future<int> updateSupplier(Supplier supplier) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.updateSupplier(supplier.id!, supplier.toMap());
+    final result = await DatabaseHelper.updateSupplier(supplier.id!, {
+      'name': supplier.name,
+      'phone': supplier.phone,
+      'address': supplier.address,
+      'notes': supplier.notes,
+      'balance': supplier.balance,
+      'updated_at': DateTime.now().toIso8601String(),
+    });
     notifyListeners();
     return result;
   }
@@ -1408,37 +1461,30 @@ class AppProvider extends ChangeNotifier {
   Future<void> updateAffectedProductsCost(int ingredientId) async {
     final affectedProductIds = await DatabaseHelper.getProductIdsByIngredient(ingredientId);
     for (final productId in affectedProductIds) {
-      await updateProductCostFromRecipe(productId);
+      await updateProductCostFromRecipe(productId, notify: false);
     }
+    // Callers notify once after the complete recalculation batch finishes.
   }
 
   // ==================== RECIPE MANAGEMENT ====================
 
   Future<double> calculateProductCost(int productId) async {
     final ingredients = await DatabaseHelper.getProductIngredients(productId);
-    double totalCost = 0;
-    
-    for (var item in ingredients) {
-      // Get the latest cost_price from inventory for each ingredient
-      final ingredientId = item['ingredient_id'] as int;
-      final quantityInRecipe = (item['quantity'] as num).toDouble();
-      
-      final ingredientData = await DatabaseHelper.getIngredientById(ingredientId);
-      if (ingredientData.isNotEmpty) {
-        final currentCostPrice = (ingredientData.first['cost_price'] as num).toDouble();
-        totalCost += quantityInRecipe * currentCostPrice;
-      }
-    }
-    return totalCost;
+    return ingredients.fold<double>(
+      0,
+      (total, item) => total +
+          (item['quantity'] as num).toDouble() *
+          ((item['cost_price'] as num?)?.toDouble() ?? 0),
+    );
   }
 
-  Future<void> updateProductCostFromRecipe(int productId) async {
+  Future<void> updateProductCostFromRecipe(int productId, {bool notify = true}) async {
     final newCost = await calculateProductCost(productId);
     await _db!.rawUpdate(
       'UPDATE products SET cost = ?, updated_at = ? WHERE id = ?',
       [newCost, DateTime.now().toIso8601String(), productId],
     );
-    notifyListeners();
+    if (notify) notifyListeners();
   }
 
   Future<int> addProductIngredient(ProductIngredient link) async {
