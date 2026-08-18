@@ -1,5 +1,5 @@
 import 'dart:math' as math;
-import 'package:hotburger/core/utils/financial_calculator.dart';
+import 'package:hot_burger_last/core/utils/financial_calculator.dart';
 import 'package:test/test.dart';
 
 FinancialLineItem _line({
