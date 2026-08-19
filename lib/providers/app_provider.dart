@@ -1470,7 +1470,17 @@ class AppProvider extends ChangeNotifier {
 
     final summary = summarizeInvoices(invoiceRows, itemRows);
     final totalExpenses = (expensesResult.first['total'] as num?)?.toDouble() ?? 0;
-    final agg = aggregateSummary(summary.invoices.values.toList(), expensesTotal: totalExpenses);
+    // Phase 5.1.1 (BI-F-01): reuse the payment split columns already
+    // computed by the sales query above — never leave cashTotal/cardTotal/
+    // bankTotal at the aggregateSummary default of zero.
+    final salesRow = sales.first;
+    final paymentSplits = <String, double>{
+      'cash': (salesRow['cash'] as num).toDouble(),
+      'card': (salesRow['card'] as num).toDouble(),
+      'bank': (salesRow['transfer'] as num).toDouble(),
+    };
+    final agg = aggregateSummary(summary.invoices.values.toList(),
+        expensesTotal: totalExpenses, paymentSplits: paymentSplits);
 
     final grossProfit = agg.grossProfitWithFallback;
 
