@@ -16,7 +16,8 @@ Future<Database> openIntegrationTestDatabase() =>
 /// The returned provider is owned by the caller and closed in tearDown via
 /// [disposeAppProvider].
 Future<AppProvider> openTestProvider(Database db) async {
-  final provider = AppProvider(db);
+  final provider = AppProvider();
+  await provider.initDatabase();
   // A completed sale requires an open shift, and opening a shift requires a
   // logged-in manager user. Sign in with a legacy-plaintext row (login() also
   // accepts empty salt+hash and a matching `password` column).

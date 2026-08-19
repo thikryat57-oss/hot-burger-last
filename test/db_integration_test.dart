@@ -7,6 +7,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:hot_burger_last/core/database/database_helper.dart';
+import 'package:hot_burger_last/core/constants/constants.dart';
 import 'package:hot_burger_last/models/models.dart';
 import 'package:hot_burger_last/providers/app_provider.dart';
 import 'helpers/db_integration_helpers.dart';
