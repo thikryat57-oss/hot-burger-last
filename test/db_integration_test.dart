@@ -20,9 +20,9 @@ Invoice _makeInvoice({
 }) {
   // Subtotal and paid are computed from the actual cart lines so the
   // createInvoice subtotal-vs-lines guard can never be tripped by the test.
-  final subtotal =
-      items.fold<double>(0, (s, i) => s + i.price * i.quantity);
-  final paid = (subtotal - discount).clamp(0, double.infinity);
+  final subtotal = items.fold<double>(
+      0, (double s, i) => s + i.price * i.quantity.toDouble());
+  final paid = (subtotal - discount).clamp(0.0, double.infinity);
   return Invoice(
     invoiceNumber: number,
     subtotalAmount: subtotal,

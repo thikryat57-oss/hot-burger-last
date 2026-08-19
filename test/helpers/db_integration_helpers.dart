@@ -4,6 +4,7 @@
 // so tests read exactly like the schema they exercise.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:hot_burger_last/core/database/database_helper.dart';
 import 'package:hot_burger_last/providers/app_provider.dart';
 
