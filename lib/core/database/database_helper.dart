@@ -225,7 +225,7 @@ class DatabaseHelper {
   static Future<void> _createVersion4Tables(Database db) async {
     // Suppliers table
     await db.execute('''
-      CREATE TABLE suppliers (
+      CREATE TABLE IF NOT EXISTS suppliers (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         phone TEXT,
@@ -239,7 +239,7 @@ class DatabaseHelper {
 
     // Purchase Invoices table
     await db.execute('''
-      CREATE TABLE purchase_invoices (
+      CREATE TABLE IF NOT EXISTS purchase_invoices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         supplier_id INTEGER NOT NULL,
         invoice_number TEXT NOT NULL,
@@ -255,7 +255,7 @@ class DatabaseHelper {
 
     // Purchase Items table
     await db.execute('''
-      CREATE TABLE purchase_items (
+      CREATE TABLE IF NOT EXISTS purchase_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         purchase_invoice_id INTEGER NOT NULL,
         ingredient_id INTEGER NOT NULL,
@@ -269,7 +269,7 @@ class DatabaseHelper {
 
     // Supplier Payments table
     await db.execute('''
-      CREATE TABLE supplier_payments (
+      CREATE TABLE IF NOT EXISTS supplier_payments (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         supplier_id INTEGER NOT NULL,
         purchase_invoice_id INTEGER,
