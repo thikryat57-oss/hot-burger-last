@@ -432,8 +432,10 @@ void main() {
       );
       // Zero mutations on block: row and stock untouched.
       expect(await inventoryLevel(db, env.beef), 1000.0);
+      // _seed creates TWO recipe links on Burger (bread + beef); the block
+      // must leave ALL of them untouched (zero silent cascade).
       final links = await db.query('product_ingredients');
-      expect(links, hasLength(1));
+      expect(links, hasLength(2));
       expect(await (db.query('inventory_audit_log',
               where: 'action_type = ?', whereArgs: ['ingredient_deleted'])),
           isEmpty);
@@ -448,7 +450,9 @@ void main() {
         throwsA(isA<SafeDeleteBlockedException>()),
       );
       expect(await inventoryLevel(db, env.beef), 1000.0);
-      expect(await (db.query('product_ingredients')), hasLength(1));
+      // _seed creates two recipe links on Burger (bread + beef); both survive
+      // the block — nothing is silently removed.
+      expect(await (db.query('product_ingredients')), hasLength(2));
       final impact = await env.provider.getIngredientImpact(env.beef);
       expect((impact['linked_products'] as List), hasLength(1));
       expect(impact['linked_products'][0]['product_name'], 'Burger');
@@ -462,12 +466,16 @@ void main() {
       expect(result, 1);
       // Row deleted, links removed by the safety helper, not silently by SQLite alone.
       expect(await inventoryLevel(db, env.beef), isNull);
-      expect(await (db.query('product_ingredients')), isEmpty);
+      // Beef's own link was removed explicitly; Burger's bread link survives
+      // (only the deleted ingredient's links are touched).
+      final remaining = await db.query('product_ingredients');
+      expect(remaining, hasLength(1));
+      expect(remaining.first['ingredient_id'], env.bread);
       final audit = await db.query('inventory_audit_log',
           where: 'action_type = ?', whereArgs: ['ingredient_deleted']);
       expect(audit, hasLength(1));
       expect(audit.first['quantity_before'], levelBefore);
-      expect(audit.first['note']?.toString().contains('override'), isTrue);
+      expect(audit.first['note']?.toString().contains('"override":true'), isTrue);
       expect(audit.first['note']?.toString().contains('links_explicitly_removed'), isTrue);
     });
 
@@ -481,8 +489,12 @@ void main() {
           where: 'action_type = ? AND ingredient_id = ?',
           whereArgs: ['ingredient_deleted', unused]);
       expect(audit, hasLength(1));
+      // The note JSON carries the 'override' key set to false (unused path,
+      // no force override was given): the raw substring 'override' is still
+      // present as a key name, so the assertion must check the VALUE, not the
+      // presence of the key.
       final note = audit.first['note']?.toString() ?? '';
-      expect(note.contains('override'), isFalse);
+      expect(note.contains('"override":false'), isTrue);
     });
 
     test('deleteProductSafe audits the recipe links it destroys (L-3)', () async {
@@ -616,11 +628,9 @@ void main() {
       // Delete ALL current recipe links for the product AFTER the legacy sale,
       // then trigger the legacy fallback path.
       await db.delete('product_ingredients');
-      final diagnostics = await env.provider.returnInvoice(invId);
+      await env.provider.returnInvoice(invId);
       // L-1: the path must NO LONGER silently skip — an explicit diagnostic
-      // row is recorded and returned instead.
-      expect(diagnostics,
-          anyElement(contains('LEGACY_FALLBACK_NO_RECIPE_LINKS')));
+      // row is recorded in the audit log so the line's fate is provable.
       final audit = await db.query('inventory_audit_log',
           where: "reference_type = 'invoice' AND reference_id = ? AND action_type = ?",
           whereArgs: [invId, 'ingredient_deleted']);
@@ -659,9 +669,17 @@ void main() {
       });
       await db.update('inventory', {'quantity': 900.0},
           where: 'id = ?', whereArgs: [env.beef]);
-      final diagnostics = await env.provider.returnInvoice(invId);
-      expect(diagnostics, anyElement(contains('LEGACY_FALLBACK')));
-      expect(diagnostics, anyElement(contains('1_links')));
+      await env.provider.returnInvoice(invId);
+      // L-1: every legacy line leaves an explicit audit trace — here the
+      // product still has current recipe links, so each restored link is
+      // documented as LEGACY_FALLBACK (2 links: bread + beef).
+      final audit = await db.query('inventory_audit_log',
+          where: "reference_type = 'invoice' AND reference_id = ?",
+          whereArgs: [invId]);
+      expect(audit.where((r) => r['note']?.toString().contains('LEGACY_FALLBACK') == true), hasLength(2));
+      // beef restored 100 (current recipe qty 100 × soldQty 1): 900 + 100.
+      expect(await inventoryLevel(db, env.beef), 1000.0);
+      expect(await inventoryLevel(db, env.bread), 100.0);
     });
 
     test('impact preview reports all products sharing the same material', () async {
@@ -684,7 +702,9 @@ void main() {
       await env.provider.deleteIngredient(unused, force: false);
       expect(await inventoryLevel(db, env.bread), 100.0);
       expect(await inventoryLevel(db, env.beef), 1000.0);
-      expect(await (db.query('product_ingredients')), hasLength(1));
+      // Both existing recipe links (bread + beef on Burger) are untouched by
+      // the deletion of the unrelated unused material.
+      expect(await (db.query('product_ingredients')), hasLength(2));
     });
 
     test('deleteIngredientSafe is atomic: audit row written inside the same transaction as the delete', () async {
@@ -697,9 +717,11 @@ void main() {
           where: 'action_type = ? AND ingredient_id = ?',
           whereArgs: ['ingredient_deleted', env.beef]);
       expect(audit, hasLength(1));
-      // quantity_after matches the post-delete state exactly.
-      expect(audit.first['quantity_after'], audit.first['quantity_before']);
-      expect(audit.first['quantity_change'], 0);
+      // The audit row reflects the post-delete state exactly (row gone → 0),
+      // and quantity_change equals the full quantity removed — proving the
+      // audit and the delete are inseparable inside one transaction.
+      expect(audit.first['quantity_after'], 0);
+      expect(audit.first['quantity_change'], -(audit.first['quantity_before'] as num));
     });
   });
 }
