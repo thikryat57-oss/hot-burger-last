@@ -443,4 +443,11 @@
 
 ## Safety Note (footer)
 
+**ملاحظة شفافية عند بوابات الرفع:** عند تشغيل بوابات الرفع النهائي أظهر `flutter analyze` تحذيرين (warnings) غير مشمولين في الـ 253 info المسجلة سابقًا:
+
+1. `unused_field '_getDateRange'` في `lib/screens/reports/profit_report_screen.dart:23` (متغير غير مستخدم).
+2. `unnecessary_non_null_assertion` في `lib/screens/sales/sales_screen.dart:916` (`!` غير ضروري).
+
+كلاهما تحذيرات جودة كود فقط — ليست أخطاء runtime ولا تمس سلامة البيانات أو الحسابات أو الترحيلات، ولا تفشل CI لأن workflow (`build_apk.yml`) يعمل بـ `flutter analyze --no-fatal-infos --no-fatal-warnings`. يُوثقان للشفافية. الملفان لم يُمسا منذ إصلاحات 15–18 أغسطس السابقة.
+
 هذا تقرير READ-ONLY. لم يُعدَّل أي Production Code أو Test أو Database أو Schema أو Migration أو CI أو UI أو dependencies. الأرقام المذكورة هنا (136/136، 0 أخطاء، P0=0/P1=0/P2=1/P3=7) نتجت من فحوصات مستقلة على نسخة مستنسخة طازجة من المستودع في تاريخ التدقيق، وقد تحفظ GitHub Actions الأحدث دائمًا. في أي تعارض بين هذا التقرير وأي نتيجة CI مستقبلية، **نتيجة CI الجارية هي المرجع الأعلى**.
