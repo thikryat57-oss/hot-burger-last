@@ -631,9 +631,13 @@ void main() {
       await env.provider.returnInvoice(invId);
       // L-1: the path must NO LONGER silently skip — an explicit diagnostic
       // row is recorded in the audit log so the line's fate is provable.
+      // The L-1 diagnostic is written by the RETURN path with the same
+      // action_type as the return operation ('sale_returned'), so the filter
+      // must match that — the audit row proves the legacy line's fate was
+      // never silently skipped even though nothing was restored.
       final audit = await db.query('inventory_audit_log',
           where: "reference_type = 'invoice' AND reference_id = ? AND action_type = ?",
-          whereArgs: [invId, 'ingredient_deleted']);
+          whereArgs: [invId, 'sale_returned']);
       expect(audit.any((r) =>
           r['note']?.toString().contains('LEGACY_FALLBACK_NO_RECIPE_LINKS') == true), isTrue);
     });
@@ -677,9 +681,11 @@ void main() {
           where: "reference_type = 'invoice' AND reference_id = ?",
           whereArgs: [invId]);
       expect(audit.where((r) => r['note']?.toString().contains('LEGACY_FALLBACK') == true), hasLength(2));
-      // beef restored 100 (current recipe qty 100 × soldQty 1): 900 + 100.
+      // Legacy fallback restores from CURRENT recipe links: bread qty 2.0 and
+      // beef qty 100.0, each × soldQty 1. Beef: 900 + 100 = 1000; bread stays
+      // untouched by the legacy sale, so 100 + 2 = 102.
       expect(await inventoryLevel(db, env.beef), 1000.0);
-      expect(await inventoryLevel(db, env.bread), 100.0);
+      expect(await inventoryLevel(db, env.bread), 102.0);
     });
 
     test('impact preview reports all products sharing the same material', () async {
