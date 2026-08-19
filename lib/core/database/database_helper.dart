@@ -147,6 +147,7 @@ class DatabaseHelper {
         cost_snapshot REAL NOT NULL DEFAULT 0,
         unit_profit REAL NOT NULL DEFAULT 0,
         total_profit REAL NOT NULL DEFAULT 0,
+        recipe_snapshot TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
       )
@@ -374,6 +375,14 @@ class DatabaseHelper {
       await db.execute('CREATE INDEX IF NOT EXISTS idx_customer_points_invoice ON customer_points_log(invoice_id)');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_audit_invoice_action ON invoice_audit_log(invoice_id, action_type)');
       await db.execute('CREATE INDEX IF NOT EXISTS idx_product_ingredients_ingredient ON product_ingredients(ingredient_id)');
+    }
+    // Migration from v15 to v16: immutable historical recipe snapshot per
+    // invoice line (Phase 2.1 — historical inventory integrity).
+    if (oldVersion < 16) {
+      final columns = await db.rawQuery('PRAGMA table_info(invoice_items)');
+      if (!columns.any((c) => c['name'] == 'recipe_snapshot')) {
+        await db.execute('ALTER TABLE invoice_items ADD COLUMN recipe_snapshot TEXT');
+      }
     }
   }
 

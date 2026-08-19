@@ -588,14 +588,26 @@ class AppProvider extends ChangeNotifier {
 
     final Map<int, double> requiredIngredients = {};
     final Map<int, String> ingredientNames = {};
+    // Historical recipe snapshot (Phase 2.1): capture the CURRENT recipe as an
+    // immutable JSON record per invoice line, so Return/Void can restore the
+    // exact quantities originally deducted even after the recipe changes.
+    final Map<int, List<Map<String, dynamic>>> recipeSnapshots = {};
     for (final item in items) {
       final links = await DatabaseHelper.getProductIngredients(item.productId);
+      final snapshotRows = <Map<String, dynamic>>[];
       for (final link in links) {
         final ingredientId = link['ingredient_id'] as int;
         final perUnit = (link['quantity'] as num).toDouble();
         requiredIngredients[ingredientId] = (requiredIngredients[ingredientId] ?? 0) + perUnit * item.quantity;
         ingredientNames[ingredientId] = link['ingredient_name'] as String;
+        snapshotRows.add({
+          'id': ingredientId,
+          'name': link['ingredient_name'] as String,
+          'qty': perUnit,
+          'cost': (link['cost_price'] as num?)?.toDouble() ?? 0.0,
+        });
       }
+      recipeSnapshots[item.productId] = snapshotRows;
     }
     for (final entry in requiredIngredients.entries) {
       final stock = await DatabaseHelper.getIngredientById(entry.key);
@@ -626,11 +638,15 @@ class AppProvider extends ChangeNotifier {
       for (final item in items) {
         final productCostAtSale = costSnapshots[item.productId] ?? 0.0;
         final unitProfit = item.price - productCostAtSale;
+        // Persist the immutable historical recipe snapshot inside the same
+        // atomic transaction (Phase 2.1). Never committed without the items.
+        final snapshotJson = encodeRecipeSnapshot(recipeSnapshots[item.productId]);
         await txn.insert('invoice_items', {
           'invoice_id': id, 'product_id': item.productId, 'product_name': item.productName,
           'quantity': item.quantity, 'price': item.price, 'total': item.total,
           'cost_snapshot': productCostAtSale, 'unit_profit': unitProfit,
           'total_profit': unitProfit * item.quantity,
+          'recipe_snapshot': snapshotJson,
         });
       }
       for (final entry in requiredIngredients.entries) {
@@ -753,25 +769,10 @@ class AppProvider extends ChangeNotifier {
       if (status == 'cancelled') throw Exception('الفاتورة ملغاة بالفعل');
       final items = await txn.query('invoice_items', where: 'invoice_id = ?', whereArgs: [id]);
       final now = DateTime.now().toIso8601String();
-      for (final item in items) {
-        final productId = item['product_id'] as int;
-        final soldQty = (item['quantity'] as num).toDouble();
-        final links = await txn.rawQuery(
-          'SELECT pi.ingredient_id, pi.quantity, inv.name, inv.quantity AS current_quantity, inv.cost_price '
-          'FROM product_ingredients pi INNER JOIN inventory inv ON pi.ingredient_id = inv.id WHERE pi.product_id = ?', [productId]);
-        for (final link in links) {
-          final ingredientId = link['ingredient_id'] as int;
-          final restore = (link['quantity'] as num).toDouble() * soldQty;
-          final before = (link['current_quantity'] as num).toDouble();
-          final after = before + restore;
-          await txn.update('inventory', {'quantity': after, 'updated_at': now}, where: 'id = ?', whereArgs: [ingredientId]);
-          await txn.insert('inventory_audit_log', {
-            'action_date': now, 'action_type': 'sale_returned', 'ingredient_id': ingredientId,
-            'ingredient_name': link['name'], 'quantity_before': before, 'quantity_change': restore,
-            'quantity_after': after, 'cost_price_at_action': link['cost_price'], 'reference_type': 'invoice', 'reference_id': id,
-          });
-        }
-      }
+      // Phase 2.1: restore from the immutable historical recipe snapshot when
+      // present; never read current product_ingredients for snapshot-backed
+      // lines (that is the P0 corruption described in the Phase 2.0 audit).
+      await restoreInventoryFromSnapshots(txn, items, id, now, 'sale_returned', 'استرجاع');
       final customerId = rows.first['customer_id'] as int?;
       if (customerId != null) {
         final customerRows = await txn.query('customers', where: 'id = ?', whereArgs: [customerId], limit: 1);
@@ -831,26 +832,10 @@ class AppProvider extends ChangeNotifier {
       if (rows.isEmpty || rows.first['status'] == 'cancelled' || rows.first['status'] == 'returned') return 0;
       final items = await txn.query('invoice_items', where: 'invoice_id = ?', whereArgs: [id]);
       final now = DateTime.now().toIso8601String();
-      for (final item in items) {
-        final productId = item['product_id'] as int;
-        final soldQty = (item['quantity'] as num).toDouble();
-        final links = await txn.rawQuery(
-          'SELECT pi.ingredient_id, pi.quantity, inv.name, inv.quantity AS current_quantity, inv.cost_price '
-          'FROM product_ingredients pi INNER JOIN inventory inv ON pi.ingredient_id = inv.id WHERE pi.product_id = ?', [productId]);
-        for (final link in links) {
-          final ingredientId = link['ingredient_id'] as int;
-          final restore = (link['quantity'] as num).toDouble() * soldQty;
-          final before = (link['current_quantity'] as num).toDouble();
-          final cost = (link['cost_price'] as num).toDouble();
-          final after = before + restore;
-          await txn.update('inventory', {'quantity': after, 'updated_at': now}, where: 'id = ?', whereArgs: [ingredientId]);
-          await txn.insert('inventory_audit_log', {
-            'action_date': now, 'action_type': 'sale_cancelled', 'ingredient_id': ingredientId,
-            'ingredient_name': link['name'], 'quantity_before': before, 'quantity_change': restore,
-            'quantity_after': after, 'cost_price_at_action': cost, 'reference_type': 'invoice', 'reference_id': id,
-          });
-        }
-      }
+      // Phase 2.1: restore from the immutable historical recipe snapshot when
+      // present; never read current product_ingredients for snapshot-backed
+      // lines (that is the P0 corruption described in the Phase 2.0 audit).
+      await restoreInventoryFromSnapshots(txn, items, id, now, 'sale_cancelled', 'إلغاء');
       final customerId = rows.first['customer_id'] as int?;
       if (customerId != null) {
         final customerRows = await txn.query('customers', where: 'id = ?', whereArgs: [customerId], limit: 1);
@@ -906,6 +891,137 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<int> deleteInvoice(int id) => voidInvoice(id);
+
+  // ==================== PHASE 2.1 — HISTORICAL RECIPE SNAPSHOT ====================
+
+  /// Serializes a recipe snapshot (per invoice line) to immutable JSON.
+  /// Guards against NaN/Infinity and empty recipes. Never fails with a format
+  /// error that could break the sale transaction.
+  static String encodeRecipeSnapshot(List<Map<String, dynamic>>? rows) {
+    if (rows == null || rows.isEmpty) return '[]';
+    final safe = <Map<String, dynamic>>[];
+    for (final row in rows) {
+      final id = row['id'] as int?;
+      final qty = (row['qty'] as num?)?.toDouble() ?? 0.0;
+      if (id == null || !qty.isFinite || qty < 0) continue;
+      final cost = (row['cost'] as num?)?.toDouble() ?? 0.0;
+      // cost must be finite before insertion: NaN.clamp(0, inf) yields
+      // Infinity, which jsonEncode would reject — fatal inside a sale
+      // transaction. Drop the row instead (same policy as invalid qty).
+      if (!cost.isFinite || cost < 0) continue;
+      safe.add({
+        'id': id,
+        'name': (row['name'] as String?) ?? '',
+        'qty': qty,
+        'cost': cost,
+      });
+    }
+    safe.sort((a, b) => (a['id'] as int).compareTo(b['id'] as int));
+    return jsonEncode({'v': 1, 'ingredients': safe});
+  }
+
+  /// Decodes a stored recipe snapshot. Returns null when absent or malformed.
+  static List<Map<String, dynamic>>? readRecipeSnapshot(String? jsonText) {
+    if (jsonText == null || jsonText.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(jsonText);
+      if (decoded is! Map) return null;
+      final ingredients = decoded['ingredients'];
+      if (ingredients is! List) return null;
+      final out = <Map<String, dynamic>>[];
+      for (final entry in ingredients) {
+        if (entry is! Map) continue;
+        final id = entry['id'] is int ? entry['id'] as int : int.tryParse(entry['id'].toString());
+        final qty = (entry['qty'] is num)
+            ? (entry['qty'] as num).toDouble()
+            : double.tryParse(entry['qty'].toString());
+        if (id == null || qty == null || !qty.isFinite || qty < 0) continue;
+        out.add({'id': id, 'name': entry['name']?.toString() ?? '', 'qty': qty,
+          'cost': (entry['cost'] is num) ? (entry['cost'] as num).toDouble().clamp(0, double.infinity) : 0.0});
+      }
+      return out;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Restores inventory for Return/Void.
+  ///
+  /// Policy (documented, no silent false precision):
+  /// - Items WITH a historical recipe_snapshot: restore exactly what was
+  ///   originally deducted (`snapshot.qty × soldQty`). The current recipe is
+  ///   NEVER consulted for these lines — this is the P0 fix.
+  /// - Items WITHOUT a snapshot (legacy invoices created before v16): restoring
+  ///   from the current recipe would NOT be historical-safe. Those lines are
+  ///   explicitly marked `note: 'LEGACY_FALLBACK'` in the audit row so the
+  ///   quantity source is always provable from the audit log.
+  /// - Duplicate product lines: each invoice item row carries its own
+  ///   snapshot, so every line restores independently without overwriting.
+  /// All mutations happen inside the caller's transaction — a failure in any
+  /// step rolls back status, inventory, and audit together.
+  Future<void> restoreInventoryFromSnapshots(
+    Transaction txn, List<Map<String, dynamic>> items, int invoiceId,
+    String now, String actionType, String _notePrefix,
+  ) async {
+    bool anyLegacy = false;
+    for (final item in items) {
+      final productId = item['product_id'] as int;
+      final soldQty = (item['quantity'] as num).toDouble();
+      final snapshotJson = item['recipe_snapshot']?.toString();
+      final snapshot = readRecipeSnapshot(snapshotJson);
+      if (snapshot == null || snapshot.isEmpty) {
+        // LEGACY invoice line: current-recipe fallback, explicitly documented.
+        anyLegacy = true;
+        final links = await txn.rawQuery(
+          'SELECT pi.ingredient_id, pi.quantity, inv.name, inv.quantity AS current_quantity, inv.cost_price '
+          'FROM product_ingredients pi INNER JOIN inventory inv ON pi.ingredient_id = inv.id WHERE pi.product_id = ?', [productId]);
+        for (final link in links) {
+          final ingredientId = link['ingredient_id'] as int;
+          final restore = (link['quantity'] as num).toDouble() * soldQty;
+          final before = (link['current_quantity'] as num).toDouble();
+          final after = before + restore;
+          await txn.update('inventory', {'quantity': after, 'updated_at': now}, where: 'id = ?', whereArgs: [ingredientId]);
+          await txn.insert('inventory_audit_log', {
+            'action_date': now, 'action_type': actionType, 'ingredient_id': ingredientId,
+            'ingredient_name': link['name'], 'quantity_before': before, 'quantity_change': restore,
+            'quantity_after': after, 'cost_price_at_action': link['cost_price'],
+            'reference_type': 'invoice', 'reference_id': invoiceId,
+            'note': 'LEGACY_FALLBACK',
+          });
+        }
+        continue;
+      }
+      // Snapshot-backed line: restore exactly what was deducted
+      // (snapshot.qty × soldQty) per snapshot row. If a referenced ingredient
+      // no longer exists (deleted after sale), log a zero-change audit row
+      // instead of silently skipping, so the audit trail stays complete.
+      for (final row in snapshot) {
+        final ingredientId = row['id'] as int;
+        final restore = (row['qty'] as double) * soldQty;
+        final current = await txn.query('inventory', columns: ['quantity', 'cost_price', 'name'], where: 'id = ?', whereArgs: [ingredientId]);
+        if (current.isEmpty) {
+          await txn.insert('inventory_audit_log', {
+            'action_date': now, 'action_type': actionType, 'ingredient_id': ingredientId,
+            'ingredient_name': row['name'], 'quantity_before': 0,
+            'quantity_change': 0, 'quantity_after': 0, 'cost_price_at_action': (row['cost'] as num?)?.toDouble() ?? 0.0,
+            'reference_type': 'invoice', 'reference_id': invoiceId,
+            'note': 'SNAPSHOT_ONLY_INGREDIENT_DELETED',
+          });
+          continue;
+        }
+        final before = (current.first['quantity'] as num).toDouble();
+        final after = before + restore;
+        await txn.update('inventory', {'quantity': after, 'updated_at': now}, where: 'id = ?', whereArgs: [ingredientId]);
+        await txn.insert('inventory_audit_log', {
+          'action_date': now, 'action_type': actionType, 'ingredient_id': ingredientId,
+          'ingredient_name': row['name'] ?? current.first['name'], 'quantity_before': before, 'quantity_change': restore,
+          'quantity_after': after, 'cost_price_at_action': (current.first['cost_price'] as num?)?.toDouble() ?? 0.0,
+          'reference_type': 'invoice', 'reference_id': invoiceId,
+          'note': 'HISTORICAL_SNAPSHOT',
+        });
+      }
+    }
+  }
 
   // Expense CRUD
   Future<int> addExpense(Expense expense) async {

@@ -2,7 +2,7 @@ class Constants {
   static const String appName = 'Hot Burger';
   static const String appVersion = '3.8.0';
   static const String dbFileName = 'hot_burger.db';
-  static const int dbVersion = 15;
+  static const int dbVersion = 16;
 
   // Default manager credentials
   static const String managerName = 'محمد احمد البشير';
