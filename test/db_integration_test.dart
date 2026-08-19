@@ -936,7 +936,9 @@ void main() {
     // createInvoice validation gate, before any financial computation runs,
     // and must never write partial rows to the database.)
     test('TEST 15 — discount greater than subtotal is rejected at the validation gate', () async {
-      final env = await _seed(db);
+      // Reuses the setUp fixture (single open shift per provider): the
+      // seed's burger quantity stays at 1, so the stock gate is satisfied
+      // and the failure must come purely from the discount validation.
       final items15 = [CartItem(productId: env.burger, productName: 'Burger', quantity: 1, price: 25.0)];
       await expectLater(
         () => env.provider.createInvoice(
@@ -950,7 +952,11 @@ void main() {
     });
 
     test('TEST 16 — insufficient ingredient stock is rejected at the validation gate', () async {
-      final env = await _seed(db, beefStock: 50); // needs 100 beef per burger
+      // Do not seed a second provider (the setUp fixture already opened one
+      // shift per provider); instead lower the seeded beef stock directly so
+      // the same provider/provider-scoped shift is reused and the stock gate
+      // alone must reject the sale.
+      await db.update('inventory', {'quantity': 50.0}, where: 'id = ?', whereArgs: [env.beef]);
       final items16 = [CartItem(productId: env.burger, productName: 'Burger', quantity: 1, price: 25.0)];
       await expectLater(
         () => env.provider.createInvoice(
@@ -962,6 +968,7 @@ void main() {
       expect(await db.query('invoices'), isEmpty);
       expect(await db.query('invoice_items'), isEmpty);
       expect(await inventoryLevel(db, env.beef), 50.0);
+      expect(await inventoryLevel(db, env.bread), 100.0);
     });
   });
 }
