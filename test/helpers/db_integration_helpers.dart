@@ -76,20 +76,20 @@ const List<String> _v1SchemaDdl = [
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )''',
+  // NOTE: these are the v1-era columns only. payment_method (v3),
+  // subtotal/discount/paid/change (v6), kitchen_status (v9), customer_id
+  // (v10) are added to invoices by the migration ladder — adding them here
+  // would duplicate them and fail the upgrade on a real device.
   '''CREATE TABLE IF NOT EXISTS invoices (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     invoice_number TEXT NOT NULL,
     total_amount REAL NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'completed',
-    payment_method TEXT NOT NULL DEFAULT 'cash',
-    kitchen_status TEXT NOT NULL DEFAULT 'done',
-    subtotal_amount REAL NOT NULL DEFAULT 0,
-    discount_amount REAL NOT NULL DEFAULT 0,
-    paid_amount REAL NOT NULL DEFAULT 0,
-    change_amount REAL NOT NULL DEFAULT 0,
     notes TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )''',
+  // NOTE: cost_snapshot/unit_profit/total_profit (v5) and recipe_snapshot
+  // (v16) are added to invoice_items by the migration ladder.
   '''CREATE TABLE IF NOT EXISTS invoice_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     invoice_id INTEGER NOT NULL,
@@ -98,11 +98,7 @@ const List<String> _v1SchemaDdl = [
     quantity INTEGER NOT NULL DEFAULT 1,
     price REAL NOT NULL DEFAULT 0,
     total REAL NOT NULL DEFAULT 0,
-    cost_snapshot REAL NOT NULL DEFAULT 0,
-    unit_profit REAL NOT NULL DEFAULT 0,
-    total_profit REAL NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )''',
 ];
 

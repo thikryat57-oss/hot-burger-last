@@ -126,7 +126,7 @@ void main() {
       );
       // bread: 3 × 2 = 6, beef: 3 × 100 = 300
       expect(await inventoryLevel(db, env.bread), 94.0);
-      expect(await inventoryLevel(db, env.beef), (10 - 300).toDouble());
+      expect(await inventoryLevel(db, env.beef), 700.0);
       final deltas = await auditDeltaPerIngredient(db, invoiceId);
       expect(deltas[env.bread], -6.0);
       expect(deltas[env.beef], -300.0);
@@ -174,7 +174,7 @@ void main() {
       );
       // State after sale: bread 98, beef 0.
       expect(await inventoryLevel(db, env.bread), 98.0);
-      expect(await inventoryLevel(db, env.beef), (10 - 100).toDouble());
+      expect(await inventoryLevel(db, env.beef), 900.0);
 
       // Recipe change (the Phase 2.0 corruption scenario): beef → 150g/unit.
       await db.update('product_ingredients', {'quantity': 150.0},
@@ -186,7 +186,7 @@ void main() {
 
       // bread: 98 + 2 = 100; beef: (10-100) + 100 = 10 — original only.
       expect(await inventoryLevel(db, env.bread), 100.0);
-      expect(await inventoryLevel(db, env.beef), 10.0);
+      expect(await inventoryLevel(db, env.beef), 1000.0);
     });
 
     test('legacy invoice (NULL snapshot) falls back to the current recipe with a warning row', () async {
@@ -232,11 +232,11 @@ void main() {
         'reference_type': 'invoice',
         'reference_id': invId,
         'cost_price_at_action': 1.0,
-        'quantity_before': 10.0,
-        'quantity_after': -90.0,
+        'quantity_before': 1000.0,
+        'quantity_after': 900.0,
       });
-      // Beef after the legacy sale: -90.
-      expect(await inventoryLevel(db, env.beef), (10 - 100).toDouble());
+      // Beef after the legacy sale: 900.
+      expect(await inventoryLevel(db, env.beef), 900.0);
 
       // Change the recipe to 150g AFTER the legacy sale.
       await db.update('product_ingredients', {'quantity': 150.0},
@@ -246,7 +246,7 @@ void main() {
       // trade-off; the audit row must warn (contains_legacy).
       // beef: 10 - 100 (legacy sale) + 150 (fallback restore) = 60.
       await env.provider.returnInvoice(invId);
-      expect(await inventoryLevel(db, env.beef), 60.0);
+      expect(await inventoryLevel(db, env.beef), 1050.0);
       final auditRows = await db.query('inventory_audit_log',
           where: 'reference_type = ? AND reference_id = ?', whereArgs: ['invoice', invId]);
       expect(auditRows.any((r) => r['note']?.toString().contains('LEGACY_FALLBACK') == true), isTrue);
@@ -281,7 +281,7 @@ void main() {
       );
       // 1 + 2 = 3 burgers: bread -6, beef -300.
       expect(await inventoryLevel(db, env.bread), 94.0);
-      expect(await inventoryLevel(db, env.beef), (10 - 300).toDouble());
+      expect(await inventoryLevel(db, env.beef), 700.0);
       final rows = await db.query('invoice_items', where: 'invoice_id = ?', whereArgs: [invoiceId]);
       expect(rows, hasLength(2));
       expect(rows.where((r) => r['quantity'] == 1), hasLength(1));
@@ -311,13 +311,13 @@ void main() {
       await env.provider.voidInvoice(invoiceId);
       expect(await invoiceStatus(db, invoiceId), 'cancelled');
       expect(await inventoryLevel(db, env.bread), 100.0);
-      expect(await inventoryLevel(db, env.beef), 10.0);
+      expect(await inventoryLevel(db, env.beef), 1000.0);
       // Double-void is rejected by the state guard: it returns 0 and must NOT
       // re-apply inventory deltas (any second credit would over-restore).
       final second = await env.provider.voidInvoice(invoiceId);
       expect(second, 0);
       expect(await inventoryLevel(db, env.bread), 100.0);
-      expect(await inventoryLevel(db, env.beef), 10.0);
+      expect(await inventoryLevel(db, env.beef), 1000.0);
     });
 
     test('return-then-void and void-of-returned are both rejected', () async {
@@ -340,7 +340,7 @@ void main() {
       final secondReturn = await env.provider.returnInvoice(invoiceId);
       expect(secondReturn, 0);
       expect(await inventoryLevel(db, env.bread), 100.0);
-      expect(await inventoryLevel(db, env.beef), 10.0);
+      expect(await inventoryLevel(db, env.beef), 1000.0);
     });
 
     test('guard: insufficient stock blocks the sale with zero mutations', () async {
