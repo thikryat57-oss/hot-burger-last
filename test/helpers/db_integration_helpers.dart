@@ -12,6 +12,99 @@ import 'package:hot_burger_last/providers/app_provider.dart';
 Future<Database> openIntegrationTestDatabase() =>
     DatabaseHelper.openTestDatabase();
 
+/// Opens a RAW in-memory database WITHOUT production handlers and seeds it
+/// with the v1 baseline schema: exactly the tables a v1 device had, using
+/// the production CREATE statements verbatim (guarded with IF NOT EXISTS so
+/// the migration ladder can re-run them safely) and `user_version = 1`.
+/// This simulates a real device running its first app upgrade.
+Future<Database> openRawV1Database() async {
+  sqfliteFfiInit();
+  final db = await databaseFactoryFfi.openDatabase(inMemoryDatabasePath);
+  for (final ddl in _v1SchemaDdl) {
+    await db.execute(ddl);
+  }
+  await db.execute('PRAGMA user_version = 1');
+  return db;
+}
+
+/// v1 baseline DDL — extracted verbatim from production _onCreate so the
+/// migration ladder (production code) exercises the exact same statements
+/// a real device would on first upgrade. Only the v1-era tables are
+/// included; the ladder adds every later table/column itself.
+const List<String> _v1SchemaDdl = [
+  '''CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    password TEXT NOT NULL DEFAULT '',
+    password_hash TEXT,
+    password_salt TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    role TEXT NOT NULL DEFAULT 'manager',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )''',
+  '''CREATE TABLE IF NOT EXISTS categories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    description TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )''',
+  '''CREATE TABLE IF NOT EXISTS products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    category_id INTEGER,
+    price REAL NOT NULL DEFAULT 0,
+    cost REAL NOT NULL DEFAULT 0,
+    description TEXT,
+    image_path TEXT,
+    is_available INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL
+  )''',
+  '''CREATE TABLE IF NOT EXISTS raw_materials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    unit TEXT,
+    quantity REAL NOT NULL DEFAULT 0,
+    cost REAL NOT NULL DEFAULT 0,
+    supplier TEXT,
+    notes TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )''',
+  '''CREATE TABLE IF NOT EXISTS invoices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_number TEXT NOT NULL,
+    total_amount REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL DEFAULT 'completed',
+    payment_method TEXT NOT NULL DEFAULT 'cash',
+    kitchen_status TEXT NOT NULL DEFAULT 'done',
+    subtotal_amount REAL NOT NULL DEFAULT 0,
+    discount_amount REAL NOT NULL DEFAULT 0,
+    paid_amount REAL NOT NULL DEFAULT 0,
+    change_amount REAL NOT NULL DEFAULT 0,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )''',
+  '''CREATE TABLE IF NOT EXISTS invoice_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    invoice_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    product_name TEXT NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    price REAL NOT NULL DEFAULT 0,
+    total REAL NOT NULL DEFAULT 0,
+    cost_snapshot REAL NOT NULL DEFAULT 0,
+    unit_profit REAL NOT NULL DEFAULT 0,
+    total_profit REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE CASCADE
+  )''',
+];
+
 /// Seeds a manager user and opens an AppProvider wired to the test database.
 /// The returned provider is owned by the caller and closed in tearDown via
 /// [disposeAppProvider].

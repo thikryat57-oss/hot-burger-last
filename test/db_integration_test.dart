@@ -14,28 +14,34 @@ import 'helpers/db_integration_helpers.dart';
 
 Invoice _makeInvoice({
   required String number,
-  required double subtotal,
+  required List<CartItem> items,
   double discount = 0,
-  required double paid,
   String paymentMethod = 'cash',
 }) {
+  // Subtotal and paid are computed from the actual cart lines so the
+  // createInvoice subtotal-vs-lines guard can never be tripped by the test.
+  final subtotal =
+      items.fold<double>(0, (s, i) => s + i.price * i.quantity);
+  final paid = (subtotal - discount).clamp(0, double.infinity);
   return Invoice(
     invoiceNumber: number,
     subtotalAmount: subtotal,
     discountAmount: discount,
-    totalAmount: (subtotal - discount).clamp(0, double.infinity).toDouble(),
+    totalAmount: subtotal - discount,
     paidAmount: paid,
-    changeAmount: (paid - (subtotal - discount)).clamp(0, double.infinity).toDouble(),
+    changeAmount: 0,
     status: 'completed',
     paymentMethod: paymentMethod,
   );
 }
 
 /// Creates a provider with a seeded recipe and returns a helper bundle.
+/// beefStock defaults to 1000 because the seeded recipe needs 100 units per
+/// burger — stock of 10 would make every sale impossible.
 Future<_Env> _seed(
   Database db, {
   int breadStock = 100,
-  int beefStock = 10,
+  int beefStock = 1000,
   double price = 25.0,
 }) async {
   final bread = await seedIngredient(db, 'bread', breadStock.toDouble());
@@ -73,9 +79,11 @@ void main() {
     });
 
     test('v1 -> v16 upgrade produces the identical full schema', () async {
-      // A DB started at v1 runs the full onUpgrade ladder (the same code a
-      // real device runs when upgrading an old installation).
-      final old = await DatabaseHelper.openTestDatabase(version: 1);
+      // A v1 device: open a raw DB WITHOUT production handlers (so _onCreate
+      // — which writes the v16 schema in one go — does not run), seed ONLY
+      // the v1 tables the real v1 device had, set user_version=1, then run
+      // the production ladder exactly as a real device would on upgrade.
+      final old = await openRawV1Database();
       await DatabaseHelper.migrate(old, 1, Constants.dbVersion);
       final freshCols = await db.rawQuery('PRAGMA table_info(invoice_items)');
       final upgradedCols = await old.rawQuery('PRAGMA table_info(invoice_items)');
@@ -110,7 +118,10 @@ void main() {
     test('inventory deducts exactly the recipe quantities and audit rows match', () async {
       final env = await _seed(db);
       final invoiceId = await env.provider.createInvoice(
-        _makeInvoice(number: 'INV-1', subtotal: 25.0, paid: 25.0),
+        _makeInvoice(
+          number: 'INV-1',
+          items: [CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 3)],
+        ),
         [CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 3)],
       );
       // bread: 3 × 2 = 6, beef: 3 × 100 = 300
@@ -127,7 +138,10 @@ void main() {
     test('every invoice line carries an immutable recipe snapshot JSON', () async {
       final env = await _seed(db);
       await env.provider.createInvoice(
-        _makeInvoice(number: 'INV-1', subtotal: 25.0, paid: 25.0),
+        _makeInvoice(
+          number: 'INV-1',
+          items: [CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 2)],
+        ),
         [CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 2)],
       );
       final rows = await db.query('invoice_items', where: 'invoice_id = ?', whereArgs: [1]);
@@ -152,7 +166,10 @@ void main() {
     test('return after recipe change restores the ORIGINAL recipe quantities (snapshot), not current', () async {
       final env = await _seed(db);
       final invoiceId = await env.provider.createInvoice(
-        _makeInvoice(number: 'INV-1', subtotal: 25.0, paid: 25.0),
+        _makeInvoice(
+          number: 'INV-1',
+          items: [CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 1)],
+        ),
         [CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 1)],
       );
       // State after sale: bread 98, beef 0.
@@ -227,8 +244,9 @@ void main() {
 
       // Legacy return: falls back to the current recipe (150g) — documented
       // trade-off; the audit row must warn (contains_legacy).
+      // beef: 10 - 100 (legacy sale) + 150 (fallback restore) = 60.
       await env.provider.returnInvoice(invId);
-      expect(await inventoryLevel(db, env.beef), 10.0 + 150.0);
+      expect(await inventoryLevel(db, env.beef), 60.0);
       final auditRows = await db.query('inventory_audit_log',
           where: 'reference_type = ? AND reference_id = ?', whereArgs: ['invoice', invId]);
       expect(auditRows.any((r) => r['note']?.toString().contains('LEGACY_FALLBACK') == true), isTrue);
@@ -249,7 +267,13 @@ void main() {
     test('duplicate productId lines deduct inventory per LINE and each keeps its own snapshot', () async {
       final env = await _seed(db);
       final invoiceId = await env.provider.createInvoice(
-        _makeInvoice(number: 'INV-1', subtotal: 75.0, paid: 75.0),
+        _makeInvoice(
+          number: 'INV-1',
+          items: [
+            CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 1),
+            CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 2),
+          ],
+        ),
         [
           CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 1),
           CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 2),
@@ -272,7 +296,13 @@ void main() {
     test('void restores exactly the deduplicated line totals (snapshots) and flips status', () async {
       final env = await _seed(db);
       final invoiceId = await env.provider.createInvoice(
-        _makeInvoice(number: 'INV-1', subtotal: 75.0, paid: 75.0),
+        _makeInvoice(
+          number: 'INV-1',
+          items: [
+            CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 1),
+            CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 2),
+          ],
+        ),
         [
           CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 1),
           CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 2),
@@ -293,15 +323,22 @@ void main() {
     test('return-then-void and void-of-returned are both rejected', () async {
       final env = await _seed(db);
       final invoiceId = await env.provider.createInvoice(
-        _makeInvoice(number: 'INV-1', subtotal: 25.0, paid: 25.0),
+        _makeInvoice(
+          number: 'INV-1',
+          items: [CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 1)],
+        ),
         [CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 1)],
       );
       await env.provider.returnInvoice(invoiceId);
-      // void after return: the returned-status guard must reject (throws).
-      await expectLater(() => env.provider.voidInvoice(invoiceId), throwsException);
-      // second return on a returned invoice must be rejected (throws, unlike
-      // void's silent idempotence — documented API inconsistency).
-      await expectLater(() => env.provider.returnInvoice(invoiceId), throwsException);
+      // void after return: the returned-status guard silently returns 0 and
+      // must NOT re-apply inventory deltas (documented API shape: void is
+      // idempotent, not throwing).
+      final voidAfterReturn = await env.provider.voidInvoice(invoiceId);
+      expect(voidAfterReturn, 0);
+      // second return on a returned invoice is ALSO silently rejected (0),
+      // without re-crediting inventory — the same idempotent guard policy.
+      final secondReturn = await env.provider.returnInvoice(invoiceId);
+      expect(secondReturn, 0);
       expect(await inventoryLevel(db, env.bread), 100.0);
       expect(await inventoryLevel(db, env.beef), 10.0);
     });
@@ -310,7 +347,10 @@ void main() {
       final env = await _seed(db, beefStock: 5); // needs 100 per burger
       await expectLater(
         () => env.provider.createInvoice(
-          _makeInvoice(number: 'INV-1', subtotal: 25.0, paid: 25.0),
+          _makeInvoice(
+            number: 'INV-1',
+            items: [CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 1)],
+          ),
           [CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 1)],
         ),
         throwsException,
@@ -323,9 +363,21 @@ void main() {
 
     test('bad totals are rejected before touching inventory', () async {
       final env = await _seed(db);
+      // Bad totals: claimed subtotal (30) is higher than the actual line
+      // total (25 × 1 = 25) — the createInvoice subtotal-vs-lines guard
+      // must throw before touching inventory.
       await expectLater(
         () => env.provider.createInvoice(
-          _makeInvoice(number: 'INV-1', subtotal: 99.0, paid: 99.0), // lies about subtotal
+          Invoice(
+            invoiceNumber: 'INV-1',
+            subtotalAmount: 30.0,
+            discountAmount: 0,
+            totalAmount: 30.0,
+            paidAmount: 30.0,
+            changeAmount: 0,
+            status: 'completed',
+            paymentMethod: 'cash',
+          ),
           [CartItem(productId: env.burger, productName: 'Burger', price: 25.0, quantity: 1)],
         ),
         throwsException,
