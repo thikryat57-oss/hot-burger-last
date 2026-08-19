@@ -428,7 +428,7 @@ void main() {
       // Financial guard: the material must NOT be deleted.
       await expectLater(
         () => env.provider.deleteIngredient(env.beef),
-        throwsA(isA<DatabaseHelper.SafeDeleteBlockedException>()),
+        throwsA(isA<SafeDeleteBlockedException>()),
       );
       // Zero mutations on block: row and stock untouched.
       expect(await inventoryLevel(db, env.beef), 1000.0);
@@ -445,7 +445,7 @@ void main() {
       // financial), NOT silent cascade.
       await expectLater(
         () => env.provider.deleteIngredient(env.beef),
-        throwsA(isA<DatabaseHelper.SafeDeleteBlockedException>()),
+        throwsA(isA<SafeDeleteBlockedException>()),
       );
       expect(await inventoryLevel(db, env.beef), 1000.0);
       expect(await (db.query('product_ingredients')), hasLength(1));
@@ -511,7 +511,7 @@ void main() {
       });
       await expectLater(
         () => env.provider.deleteSupplier(supplierId),
-        throwsA(isA<DatabaseHelper.SafeDeleteBlockedException>()),
+        throwsA(isA<SafeDeleteBlockedException>()),
       );
       expect(
           await (db.query('supplier_payments', where: 'supplier_id = ?', whereArgs: [supplierId])),
@@ -534,7 +534,7 @@ void main() {
       });
       await expectLater(
         () => env.provider.deleteSupplier(supplierId),
-        throwsA(isA<DatabaseHelper.SafeDeleteBlockedException>()),
+        throwsA(isA<SafeDeleteBlockedException>()),
       );
       expect(await (db.query('suppliers', where: 'id = ?', whereArgs: [supplierId])), hasLength(1));
     });
