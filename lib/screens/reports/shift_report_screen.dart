@@ -178,6 +178,34 @@ class _ShiftReportScreenState extends State<ShiftReportScreen> {
                           ),
                           const SizedBox(height: 12),
 
+                          // Phase 4.2.1: Financial disclosure card (reuses the
+                          // same Card style as the rest of this report).
+                          Card(
+                            color: const Color(0xFF607D8B).withOpacity(0.08),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(color: const Color(0xFF607D8B).withOpacity(0.3)),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _FinancialRow(fmt: fmt, label: 'المبيعات الإجمالية (قبل الخصم)', value: _summary['grossSales'] ?? 0, color: const Color(0xFF607D8B)),
+                                  const SizedBox(height: 6),
+                                  _FinancialRow(fmt: fmt, label: 'الخصومات', value: _summary['discountTotal'] ?? 0, color: const Color(0xFFE65100)),
+                                  const SizedBox(height: 6),
+                                  _FinancialRow(fmt: fmt, label: 'صافي المبيعات', value: _summary['totalSales'] ?? 0, color: AppTheme.primaryColor, bold: true),
+                                  const SizedBox(height: 6),
+                                  _FinancialRow(fmt: fmt, label: 'تكلفة المبيعات', value: _summary['cogs'] ?? 0, color: const Color(0xFF00695C)),
+                                  const SizedBox(height: 6),
+                                  _FinancialRow(fmt: fmt, label: 'الربح الإجمالي', value: _summary['grossProfit'] ?? 0, color: const Color(0xFF2E7D32), bold: true),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
                           // Cash Card
                           Card(
                             color: const Color(0xFF4CAF50).withOpacity(0.1),
@@ -285,6 +313,31 @@ class _ShiftReportScreenState extends State<ShiftReportScreen> {
               icon: const Icon(Icons.print),
               label: const Text('طباعة التقرير'),
             ),
+    );
+  }
+
+  /// Minimal row widget that mirrors the row style used by the payment cards.
+  static Widget _FinancialRow({
+    required NumberFormat fmt,
+    required String label,
+    required dynamic value,
+    required Color color,
+    bool bold = false,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(fontSize: 12, color: bold ? AppTheme.textPrimary : AppTheme.textSecondary),
+          ),
+        ),
+        Text(
+          '${fmt.format(value is num ? value : 0)} ج.س',
+          style: TextStyle(fontSize: 14, fontWeight: bold ? FontWeight.bold : FontWeight.w600, color: color),
+        ),
+      ],
     );
   }
 }

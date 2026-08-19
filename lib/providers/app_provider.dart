@@ -1195,12 +1195,56 @@ class AppProvider extends ChangeNotifier {
     );
     final cardTotal = (cardResult.first['total'] is num) ? (cardResult.first['total'] as num).toDouble() : 0.0;
 
+    // Phase 4.2.1: extend the shift summary with the complete financial layer
+    // (gross sales, discount, COGS, gross profit) by consuming the unified
+    // financial calculator — the exact same primitives used by the Daily,
+    // Monthly and P&L reports, so the Shift report can never diverge.
+    final invoiceRows = await _db!.rawQuery(
+      "SELECT id, invoice_number, status, created_at, subtotal_amount, discount_amount, total_amount, payment_method FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')",
+      [startStr, endStr],
+    );
+    final itemRows = await _db!.rawQuery(
+      'SELECT invoice_id, product_id, product_name, quantity, price, total, cost_snapshot, unit_profit, total_profit FROM invoice_items WHERE DATE(created_at) BETWEEN ? AND ?',
+      [startStr, endStr],
+    );
+    final summary = summarizeInvoices(invoiceRows, itemRows);
+    final agg = aggregateSummary(summary.invoices.values.toList());
+    // COGS: identical historical semantics as the P&L query — frozen
+    // cost_snapshot at time of sale (never recomputed from current costs).
+    final cogsResult = await _db!.rawQuery('''
+      SELECT COALESCE(
+        SUM(
+          CASE WHEN ii.cost_snapshot > 0
+            THEN ii.quantity * ii.cost_snapshot
+            ELSE ii.quantity * (
+              SELECT COALESCE(SUM(pi.quantity * inv.cost_price), 0)
+              FROM product_ingredients pi
+              INNER JOIN inventory inv ON pi.ingredient_id = inv.id
+              WHERE pi.product_id = ii.product_id
+            )
+          END
+        ), 0
+      ) as cogs,
+      COALESCE(SUM(ii.total_profit), 0) as total_profit
+      FROM invoice_items ii
+      INNER JOIN invoices inv_t ON ii.invoice_id = inv_t.id
+      WHERE DATE(inv_t.created_at) BETWEEN ? AND ? AND inv_t.status NOT IN ('cancelled','returned')
+    ''', [startStr, endStr]);
+    final cogs = (cogsResult.first['cogs'] is num) ? (cogsResult.first['cogs'] as num).toDouble() : 0.0;
+    final grossProfitFromSnapshot = (cogsResult.first['total_profit'] is num) ? (cogsResult.first['total_profit'] as num).toDouble() : 0.0;
+    final grossProfit = agg.netRevenue - cogs;
     return {
       'totalSales': totalSales,
       'cashTotal': cashTotal,
       'bankTotal': bankTotal,
       'cardTotal': cardTotal,
       'invoiceCount': invoiceCount,
+      // Phase 4.2.1 financial disclosure (additive only — existing keys unchanged)
+      'grossSales': agg.grossSales,
+      'discountTotal': agg.discountTotal,
+      'cogs': cogs,
+      'grossProfit': grossProfit,
+      'grossProfitFromSnapshot': grossProfitFromSnapshot,
     };
   }
 

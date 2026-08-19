@@ -398,6 +398,32 @@ class PdfHelper {
                   pw.Text('${fmt.format(summary['totalSales'])} ج.س', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
                 ],
               ),
+              pw.SizedBox(height: 4),
+              // Phase 4.2.1: full financial disclosure — same definitions as
+              // the Daily/Monthly/P&L reports (reused from the shift summary).
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('المبيعات قبل الخصم:', style: pw.TextStyle(fontSize: 9)),
+                  pw.Text('${fmt.format(summary['grossSales'] ?? 0)} ج.س', style: pw.TextStyle(fontSize: 9)),
+                ],
+              ),
+              pw.SizedBox(height: 2),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('الخصومات:', style: pw.TextStyle(fontSize: 9)),
+                  pw.Text('${fmt.format(summary['discountTotal'] ?? 0)} ج.س', style: pw.TextStyle(fontSize: 9)),
+                ],
+              ),
+              pw.SizedBox(height: 2),
+              pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Text('تكلفة المبيعات:', style: pw.TextStyle(fontSize: 9)),
+                  pw.Text('${fmt.format(summary['cogs'] ?? 0)} ج.س', style: pw.TextStyle(fontSize: 9)),
+                ],
+              ),
               pw.SizedBox(height: 6),
               pw.Divider(thickness: 0.5),
               pw.SizedBox(height: 4),
@@ -432,7 +458,7 @@ class PdfHelper {
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text('صافي الربح:', style: pw.TextStyle(fontSize: 9)),
+                  pw.Text('الربح الإجمالي:', style: pw.TextStyle(fontSize: 9)),
                   pw.Text('${fmt.format(summary['grossProfitFromSnapshot'] ?? 0)} ج.س', style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold)),
                 ],
               ),

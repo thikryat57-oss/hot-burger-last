@@ -700,7 +700,7 @@ void main() {
           containsAll(['Burger', 'Pizza']));
     });
 
-    test('force=false delete on an unlinked material must NOT touch linked ingredients', () async {
+        test('force=false delete on an unlinked material must NOT touch linked ingredients', () async {
       final env = await _seed(db);
       // Bread is linked; beef is used only by burger too. Delete an unused
       // material via force=false (default) and assert the linked ones stay.
@@ -712,7 +712,6 @@ void main() {
       // the deletion of the unrelated unused material.
       expect(await (db.query('product_ingredients')), hasLength(2));
     });
-
     test('deleteIngredientSafe is atomic: audit row written inside the same transaction as the delete', () async {
       final env = await _seed(db);
       await env.provider.deleteIngredient(env.beef, force: true);
@@ -728,6 +727,192 @@ void main() {
       // audit and the delete are inseparable inside one transaction.
       expect(audit.first['quantity_after'], 0);
       expect(audit.first['quantity_change'], -(audit.first['quantity_before'] as num));
+    });
+  });
+
+  // ---------- Phase 4.2.1: Shift financial disclosure ----------
+  group('Phase 4.2.1 - shift financial disclosure', () {
+    late Database db;
+    late _Env env;
+    setUp(() async {
+      db = await openIntegrationTestDatabase();
+      DatabaseHelper.useTestDatabase(db);
+      env = await _seed(db);
+    });
+    tearDown(() {
+      DatabaseHelper.resetForTest();
+    });
+
+    Future<Map<String, dynamic>> _todaySummary() =>
+        env.provider.getShiftSummary(startDate: DateTime.now(), endDate: DateTime.now());
+
+    test('TEST 1 — normal invoice exposes gross/discount/net/COGS/gross profit', () async {
+      final inv = _makeInvoice(number: 'INV-1', items: [CartItem(productId: env.burger, productName: 'Burger', quantity: 1, price: 25.0)]);
+      await env.provider.createInvoice(inv);
+      final s = await _todaySummary();
+      // gross = 1 burger × 25; cogs = 2×1 (bread) + 100×1 (beef) = 102.
+      expect(s['grossSales'], 25.0);
+      expect(s['discountTotal'], 0.0);
+      expect(s['totalSales'], 25.0);
+      expect(s['cogs'], 102.0);
+      expect(s['grossProfit'], 25.0 - 102.0);
+    });
+
+    test('TEST 2 — invoice with discount uses the centralized calculator semantics', () async {
+      final inv = _makeInvoice(number: 'INV-2', items: [CartItem(productId: env.burger, productName: 'Burger', quantity: 40, price: 25.0)], discount: 100.0);
+      await env.provider.createInvoice(inv);
+      final s = await _todaySummary();
+      expect(s['grossSales'], 1000.0);
+      expect(s['discountTotal'], 100.0);
+      expect(s['totalSales'], 900.0);
+      // net − cogs: 900 − 40×102.
+      expect(s['grossProfit'], 900.0 - 40 * 102.0);
+    });
+
+    test('TEST 3 — COGS stays historical after current ingredient cost changes', () async {
+      final inv = _makeInvoice(number: 'INV-3', items: [CartItem(productId: env.burger, productName: 'Burger', quantity: 1, price: 25.0)]);
+      await env.provider.createInvoice(inv);
+      final s1 = await _todaySummary();
+      // Raise the current beef cost 10× AFTER the sale.
+      await db.update('inventory', {'cost_price': 10.0}, where: 'id = ?', whereArgs: [env.beef]);
+      final s2 = await _todaySummary();
+      // The shift financials must not move: cost_snapshot at sale is frozen.
+      expect(s2['cogs'], s1['cogs']);
+      expect(s2['grossProfit'], s1['grossProfit']);
+      expect(s1['cogs'], 102.0);
+    });
+
+    test('TEST 4 — recipe change after sale does not alter shift financials', () async {
+      final inv = _makeInvoice(number: 'INV-4', items: [CartItem(productId: env.burger, productName: 'Burger', quantity: 1, price: 25.0)]);
+      await env.provider.createInvoice(inv);
+      final s1 = await _todaySummary();
+      // Rewrite the current recipe (double the bread per unit).
+      await db.delete('product_ingredients', where: 'product_id = ?', whereArgs: [env.burger]);
+      await db.insert('product_ingredients', {'product_id': env.burger, 'ingredient_id': env.bread, 'quantity': 4.0});
+      final s2 = await _todaySummary();
+      expect(s2['cogs'], s1['cogs']);
+      expect(s2['grossProfit'], s1['grossProfit']);
+    });
+
+    test('TEST 5 — returned sale is excluded by the same semantics as other reports', () async {
+      final inv = _makeInvoice(number: 'INV-5', items: [CartItem(productId: env.burger, productName: 'Burger', quantity: 1, price: 25.0)]);
+      final invoiceId = await env.provider.createInvoice(inv);
+      final s1 = await _todaySummary();
+      expect(s1['grossSales'], 25.0);
+      await env.provider.returnInvoice(invoiceId);
+      expect(await invoiceStatus(db, invoiceId), 'returned');
+      final s2 = await _todaySummary();
+      expect(s2['grossSales'], 0.0);
+      expect(s2['totalSales'], 0.0);
+      expect(s2['cogs'], 0.0);
+    });
+
+    test('TEST 6 — voided sale follows the same exclusion semantics', () async {
+      final inv = _makeInvoice(number: 'INV-6', items: [CartItem(productId: env.burger, productName: 'Burger', quantity: 1, price: 25.0)]);
+      final invoiceId = await env.provider.createInvoice(inv);
+      final s1 = await _todaySummary();
+      expect(s1['grossSales'], 25.0);
+      await env.provider.voidInvoice(invoiceId);
+      expect(await invoiceStatus(db, invoiceId), 'cancelled');
+      final s2 = await _todaySummary();
+      expect(s2['grossSales'], 0.0);
+      expect(s2['totalSales'], 0.0);
+    });
+
+    test('TEST 7 — multiple invoices aggregate to the centralized calculator total', () async {
+      for (var i = 0; i < 5; i++) {
+        await env.provider.createInvoice(_makeInvoice(
+            number: 'INV-7-$i', items: [CartItem(productId: env.burger, productName: 'Burger', quantity: 1, price: 25.0)], discount: i.toDouble()));
+      }
+      final s = await _todaySummary();
+      // 5 × 25 gross; discount 0+1+2+3+4 = 10; net = 115; cogs = 5 × 102.
+      expect(s['grossSales'], 125.0);
+      expect(s['discountTotal'], 10.0);
+      expect(s['totalSales'], 115.0);
+      expect(s['cogs'], 5 * 102.0);
+      expect(s['grossProfit'], 115.0 - 5 * 102.0);
+      expect(s['invoiceCount'], 5);
+    });
+
+    test('TEST 8 — repeated productId in one invoice keeps discount allocation correct', () async {
+      final inv = _makeInvoice(number: 'INV-8',
+          items: [CartItem(productId: env.burger, productName: 'Burger', quantity: 10, price: 25.0), CartItem(productId: env.burger, productName: 'Burger', quantity: 10, price: 25.0)],
+          discount: 20.0);
+      await env.provider.createInvoice(inv);
+      final s = await _todaySummary();
+      expect(s['grossSales'], 500.0);
+      expect(s['discountTotal'], 20.0);
+      expect(s['totalSales'], 480.0);
+      // cogs: 20 burgers × 102.
+      expect(s['cogs'], 20 * 102.0);
+    });
+
+    test('TEST 9 — discount greater than gross cannot make net revenue negative', () async {
+      final inv = _makeInvoice(number: 'INV-9', items: [CartItem(productId: env.burger, productName: 'Burger', quantity: 1, price: 25.0)], discount: 999.0);
+      await env.provider.createInvoice(inv);
+      final s = await _todaySummary();
+      expect(s['totalSales'] as num, greaterThanOrEqualTo(0));
+      expect(s['grossProfit'] as num, greaterThanOrEqualTo(-102.0));
+    });
+
+    test('TEST 10 — empty shift returns safe zero values for all financial metrics', () async {
+      final s = await _todaySummary();
+      expect(s['totalSales'], 0.0);
+      expect(s['grossSales'], 0.0);
+      expect(s['discountTotal'], 0.0);
+      expect(s['cogs'], 0.0);
+      expect(s['grossProfit'], 0.0);
+      expect(s['invoiceCount'], 0);
+    });
+
+    test('TEST 11 — legacy invoice (no cost_snapshot) inherits the calculator fallback', () async {
+      // Seed a v17-style invoice row directly, exactly like the Phase 4.1
+      // legacy tests: no cost_snapshot at all.
+      final invId = await db.insert('invoices', {'invoice_number': 'INV-11', 'total_amount': 25.0, 'subtotal_amount': 25.0, 'discount_amount': 0, 'status': 'completed', 'payment_method': 'cash', 'created_at': DateTime.now().toIso8601String()});
+      await db.insert('invoice_items', {'invoice_id': invId, 'product_id': env.burger, 'product_name': 'Burger', 'quantity': 1, 'price': 25.0, 'total': 25.0, 'cost_snapshot': 0, 'unit_profit': 0, 'total_profit': 0});
+      final s = await _todaySummary();
+      // Calculator fallback computes COGS from the current recipe links:
+      // 2 × bread(1.0) + 100 × beef(1.0) = 102.
+      expect(s['grossSales'], 25.0);
+      expect(s['cogs'], 102.0);
+      expect(s['totalSales'], 25.0);
+    });
+
+    test('TEST 12 — payment breakdown values are unchanged (regression)', () async {
+      await env.provider.createInvoice(_makeInvoice(number: 'INV-12a', items: [CartItem(productId: env.burger, productName: 'Burger', quantity: 2, price: 25.0)], paymentMethod: 'cash'));
+      await env.provider.createInvoice(_makeInvoice(number: 'INV-12b', items: [CartItem(productId: env.burger, productName: 'Burger', quantity: 3, price: 25.0)], paymentMethod: 'bank'));
+      await env.provider.createInvoice(_makeInvoice(number: 'INV-12c', items: [CartItem(productId: env.burger, productName: 'Burger', quantity: 4, price: 25.0)], paymentMethod: 'card'));
+      final s = await _todaySummary();
+      expect(s['cashTotal'], 50.0);
+      expect(s['bankTotal'], 75.0);
+      expect(s['cardTotal'], 100.0);
+      expect(s['totalSales'], 225.0);
+    });
+
+    test('TEST 13 — shift financials equal the centralized P&L summary for the same period', () async {
+      await env.provider.createInvoice(_makeInvoice(number: 'INV-13', items: [CartItem(productId: env.burger, productName: 'Burger', quantity: 2, price: 25.0)], discount: 5.0));
+      final shift = await _todaySummary();
+      final pnl = await env.provider.getProfitAndLossSummary(startDate: DateTime.now(), endDate: DateTime.now());
+      expect(shift['grossSales'], pnl['grossSales']);
+      expect(shift['discountTotal'], pnl['discountTotal']);
+      expect(shift['totalSales'], pnl['totalRevenue']);
+      expect(shift['cogs'], pnl['cogs']);
+      expect(shift['grossProfit'], pnl['grossProfit']);
+    });
+
+    test('TEST 14 — shift consumes the centralized calculator (no duplicate engine)', () async {
+      // If getShiftSummary duplicated the arithmetic instead of consuming
+      // summarizeInvoices/aggregateSummary, any calculator behavior change
+      // would not propagate. Prove the shift summary reacts to the calculator:
+      // the centralized clamp (discount > gross → net 0) must appear in the
+      // shift summary even though no shift-specific code handles it.
+      final inv = _makeInvoice(number: 'INV-14', items: [CartItem(productId: env.burger, productName: 'Burger', quantity: 1, price: 25.0)], discount: 50.0);
+      await env.provider.createInvoice(inv);
+      final s = await _todaySummary();
+      // Centralized calculator clamps the effective discount to gross.
+      expect(s['totalSales'], 0.0);
+      expect(s['discountTotal'], 25.0);
+      expect(s['grossProfit'], 0.0 - 102.0);
     });
   });
 }
