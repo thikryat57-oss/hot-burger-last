@@ -663,11 +663,16 @@ class AppProvider extends ChangeNotifier {
         final after = before - delta;
         if (after < -0.000001) throw Exception('لا يمكن أن يصبح المخزون سالبًا');
         await txn.update('inventory', {'quantity': after, 'updated_at': now}, where: 'id = ?', whereArgs: [ingredientId]);
+        // Phase 4.6.1 (NEW-F-01): actor attribution — the executor who
+        // completed the sale is never silently omitted from the audit row.
         await txn.insert('inventory_audit_log', {
           'action_date': now, 'action_type': 'sale', 'ingredient_id': ingredientId,
           'ingredient_name': current.first['name'], 'quantity_before': before,
           'quantity_change': -delta, 'quantity_after': after, 'cost_price_at_action': cost,
           'reference_type': 'invoice', 'reference_id': id,
+          'note': jsonEncode(DatabaseHelper.actorNoteForInventory(
+            _currentUser?.id, _currentUser?.name,
+          )),
         });
       }
       await txn.insert('invoice_audit_log', {
@@ -777,7 +782,7 @@ class AppProvider extends ChangeNotifier {
       // Phase 2.1: restore from the immutable historical recipe snapshot when
       // present; never read current product_ingredients for snapshot-backed
       // lines (that is the P0 corruption described in the Phase 2.0 audit).
-      await restoreInventoryFromSnapshots(txn, items, id, now, 'sale_returned', 'استرجاع');
+      await restoreInventoryFromSnapshots(txn, items, id, now, 'sale_returned', 'استرجاع', userId: _currentUser?.id, userName: _currentUser?.name);
       final customerId = rows.first['customer_id'] as int?;
       if (customerId != null) {
         final customerRows = await txn.query('customers', where: 'id = ?', whereArgs: [customerId], limit: 1);
@@ -840,7 +845,7 @@ class AppProvider extends ChangeNotifier {
       // Phase 2.1: restore from the immutable historical recipe snapshot when
       // present; never read current product_ingredients for snapshot-backed
       // lines (that is the P0 corruption described in the Phase 2.0 audit).
-      await restoreInventoryFromSnapshots(txn, items, id, now, 'sale_cancelled', 'إلغاء');
+      await restoreInventoryFromSnapshots(txn, items, id, now, 'sale_cancelled', 'إلغاء', userId: _currentUser?.id, userName: _currentUser?.name);
       final customerId = rows.first['customer_id'] as int?;
       if (customerId != null) {
         final customerRows = await txn.query('customers', where: 'id = ?', whereArgs: [customerId], limit: 1);
@@ -969,10 +974,14 @@ class AppProvider extends ChangeNotifier {
   /// callers can surface them (e.g. manager report, UI warning).
   /// All mutations happen inside the caller's transaction — a failure in any
   /// step rolls back status, inventory, and audit together.
+  // Phase 4.6.1 (NEW-F-01): optional actor attribution — the user who
+  // triggered the return/void is written into every audit row produced here.
   Future<List<String>> restoreInventoryFromSnapshots(
     Transaction txn, List<Map<String, dynamic>> items, int invoiceId,
-    String now, String actionType, String _notePrefix,
-  ) async {
+    String now, String actionType, String _notePrefix, {
+    int? userId,
+    String? userName,
+  }) async {
     bool anyLegacy = false;
     final diagnostics = <String>[];
     for (final item in items) {
@@ -1001,7 +1010,10 @@ class AppProvider extends ChangeNotifier {
             'quantity_before': 0, 'quantity_change': 0, 'quantity_after': 0,
             'cost_price_at_action': 0,
             'reference_type': 'invoice', 'reference_id': invoiceId,
-            'note': 'LEGACY_FALLBACK_NO_RECIPE_LINKS',
+            // Phase 4.6.1 (NEW-F-01): diagnostic preserved + actor attribution.
+            'note': jsonEncode(DatabaseHelper.actorNoteForInventory(
+              userId, userName, noteText: 'LEGACY_FALLBACK_NO_RECIPE_LINKS',
+            )),
           });
           diagnostics.add('LEGACY_FALLBACK_NO_RECIPE_LINKS:product=$productId');
         } else {
@@ -1011,12 +1023,15 @@ class AppProvider extends ChangeNotifier {
             final before = (link['current_quantity'] as num).toDouble();
             final after = before + restore;
             await txn.update('inventory', {'quantity': after, 'updated_at': now}, where: 'id = ?', whereArgs: [ingredientId]);
+            // Phase 4.6.1 (NEW-F-01): diagnostic preserved + actor attribution.
             await txn.insert('inventory_audit_log', {
               'action_date': now, 'action_type': actionType, 'ingredient_id': ingredientId,
               'ingredient_name': link['name'], 'quantity_before': before, 'quantity_change': restore,
               'quantity_after': after, 'cost_price_at_action': link['cost_price'],
               'reference_type': 'invoice', 'reference_id': invoiceId,
-              'note': 'LEGACY_FALLBACK',
+              'note': jsonEncode(DatabaseHelper.actorNoteForInventory(
+                userId, userName, noteText: 'LEGACY_FALLBACK',
+              )),
             });
           }
           diagnostics.add('LEGACY_FALLBACK:${links.length}_links:product=$productId');
@@ -1032,24 +1047,30 @@ class AppProvider extends ChangeNotifier {
         final restore = (row['qty'] as double) * soldQty;
         final current = await txn.query('inventory', columns: ['quantity', 'cost_price', 'name'], where: 'id = ?', whereArgs: [ingredientId]);
         if (current.isEmpty) {
+          // Phase 4.6.1 (NEW-F-01): diagnostic preserved + actor attribution.
           await txn.insert('inventory_audit_log', {
             'action_date': now, 'action_type': actionType, 'ingredient_id': ingredientId,
             'ingredient_name': row['name'], 'quantity_before': 0,
             'quantity_change': 0, 'quantity_after': 0, 'cost_price_at_action': (row['cost'] as num?)?.toDouble() ?? 0.0,
             'reference_type': 'invoice', 'reference_id': invoiceId,
-            'note': 'SNAPSHOT_ONLY_INGREDIENT_DELETED',
+            'note': jsonEncode(DatabaseHelper.actorNoteForInventory(
+              userId, userName, noteText: 'SNAPSHOT_ONLY_INGREDIENT_DELETED',
+            )),
           });
           continue;
         }
         final before = (current.first['quantity'] as num).toDouble();
         final after = before + restore;
         await txn.update('inventory', {'quantity': after, 'updated_at': now}, where: 'id = ?', whereArgs: [ingredientId]);
+        // Phase 4.6.1 (NEW-F-01): diagnostic preserved + actor attribution.
         await txn.insert('inventory_audit_log', {
           'action_date': now, 'action_type': actionType, 'ingredient_id': ingredientId,
           'ingredient_name': row['name'] ?? current.first['name'], 'quantity_before': before, 'quantity_change': restore,
           'quantity_after': after, 'cost_price_at_action': (current.first['cost_price'] as num?)?.toDouble() ?? 0.0,
           'reference_type': 'invoice', 'reference_id': invoiceId,
-          'note': 'HISTORICAL_SNAPSHOT',
+          'note': jsonEncode(DatabaseHelper.actorNoteForInventory(
+            userId, userName, noteText: 'HISTORICAL_SNAPSHOT',
+          )),
         });
       }
     }
@@ -1525,6 +1546,9 @@ class AppProvider extends ChangeNotifier {
       costPriceAtAction: ingredient.costPrice,
       referenceType: 'ingredient',
       referenceId: result,
+      // Phase 4.6.1 (NEW-F-01): executor attribution.
+      userId: _currentUser?.id,
+      userName: _currentUser?.name,
     );
     notifyListeners();
     return result;
@@ -1561,6 +1585,9 @@ class AppProvider extends ChangeNotifier {
           costPriceAtAction: newCost,
           referenceType: 'ingredient',
           referenceId: ingredient.id,
+          // Phase 4.6.1 (NEW-F-01): executor attribution.
+          userId: _currentUser?.id,
+          userName: _currentUser?.name,
         );
       }
     }
@@ -1627,6 +1654,9 @@ class AppProvider extends ChangeNotifier {
         costPriceAtAction: newCost,
         referenceType: 'purchase',
         referenceId: null,
+        // Phase 4.6.1 (NEW-F-01): executor attribution.
+        userId: _currentUser?.id,
+        userName: _currentUser?.name,
       );
       notifyListeners();
       // Auto recalculate costs of products affected by this ingredient's price change
@@ -1693,16 +1723,19 @@ class AppProvider extends ChangeNotifier {
 
   Future<int> createPurchaseInvoice(PurchaseInvoice invoice, List<PurchaseItem> items) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
+    // Phase 4.6.1 (NEW-F-01): executor attribution for the purchase movement audit rows.
     final result = await DatabaseHelper.insertPurchaseInvoice(
       invoice.toMap(),
       items.map((e) => e.toMap()).toList(),
+      userId: _currentUser?.id,
+      userName: _currentUser?.name,
     );
-    notifyListeners();
     // Auto recalculate costs of products affected by purchased ingredients' new cost_price
     final uniqueIngredients = items.map((e) => e.ingredientId).toSet();
     for (final ingredientId in uniqueIngredients) {
       await updateAffectedProductsCost(ingredientId);
     }
+    notifyListeners();
     return result;
   }
 

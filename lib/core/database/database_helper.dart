@@ -640,8 +640,14 @@ class DatabaseHelper {
     String? referenceType,
     int? referenceId,
     String? note,
+    // Phase 4.6.1 (NEW-F-01): actor attribution using the same mechanism as
+    // Phase 4.3.1.1 — keys user_id/user_name are always present in the note
+    // (even if null) so the executor is never silently omitted.
+    int? userId,
+    String? userName,
   }) async {
     final db = await database;
+    final noteMap = actorNoteForInventory(userId, userName, noteText: note);
     await db.insert('inventory_audit_log', {
       'action_date': DateTime.now().toIso8601String(),
       'action_type': actionType,
@@ -653,8 +659,23 @@ class DatabaseHelper {
       'cost_price_at_action': costPriceAtAction,
       'reference_type': referenceType,
       'reference_id': referenceId,
-      'note': note,
+      'note': noteMap.isEmpty ? null : jsonEncode(noteMap),
     });
+  }
+
+  // Public (Phase 4.6.1, NEW-F-01): shared note map for inventory audit rows,
+  // usable by the provider for rows written inside its own transactions.
+  // Preserves any existing plain-text diagnostic under the same 'note' key.
+  static Map<String, dynamic> actorNoteForInventory(
+    int? userId,
+    String? userName, {
+    String? noteText,
+  }) {
+    final map = <String, dynamic>{..._auditActor(userId, userName)};
+    if (noteText != null && noteText.isNotEmpty) {
+      map['note'] = noteText;
+    }
+    return map;
   }
 
   static Future<List<Map<String, dynamic>>> getInventoryAuditLogs({
@@ -869,6 +890,9 @@ class DatabaseHelper {
   /// Update ingredient quantity and atomically log the movement in the audit trail.
   /// Every quantity change (sale deduction, purchase, manual adjust, restoration)
   /// goes through this function so no movement is ever recorded without a reason.
+  // Phase 4.6.1 (NEW-F-01): optional actor attribution (kept dead-code safe —
+  // this helper currently has no callers, but the note format mirrors the
+  // shared actor-note builder so it can never become a gap if activated).
   static Future<int> updateIngredientQuantity(
     int id, {
     required double delta,
@@ -876,6 +900,8 @@ class DatabaseHelper {
     int? referenceId,
     String? referenceType,
     String? note,
+    int? userId,
+    String? userName,
   }) async {
     final db = await database;
     return await db.transaction((txn) async {
@@ -904,7 +930,7 @@ class DatabaseHelper {
         'cost_price_at_action': costPrice,
         'reference_type': referenceType,
         'reference_id': referenceId,
-        'note': note,
+        'note': jsonEncode(actorNoteForInventory(userId, userName, noteText: note)),
       });
       return result;
     });
@@ -1204,7 +1230,8 @@ class DatabaseHelper {
   // Deduct ingredients when a product is sold (logged as 'sale' movement).
   // Keep the recipe lookup, stock update, and audit log on the SAME transaction;
   // starting a second transaction from inside this transaction can break atomicity.
-  static Future<void> deductProductIngredients(int productId, int soldQuantity, {int? invoiceId}) async {
+  // Phase 4.6.1 (NEW-F-01): optional actor attribution (kept dead-code safe).
+  static Future<void> deductProductIngredients(int productId, int soldQuantity, {int? invoiceId, int? userId, String? userName}) async {
     if (soldQuantity <= 0) {
       throw ArgumentError('Sold quantity must be greater than zero');
     }
@@ -1250,6 +1277,10 @@ class DatabaseHelper {
           'cost_price_at_action': costPrice,
           'reference_type': 'invoice',
           'reference_id': invoiceId,
+          // Phase 4.6.1 (NEW-F-01): actor attribution — present even though
+          // this helper currently has no callers (dead code), so it can never
+          // become an attribution gap if ever activated.
+          'note': jsonEncode(actorNoteForInventory(userId, userName)),
         });
       }
     });
@@ -1387,7 +1418,14 @@ class DatabaseHelper {
 
   // ==================== PURCHASES CRUD & LOGIC ====================
 
-  static Future<int> insertPurchaseInvoice(Map<String, dynamic> invoice, List<Map<String, dynamic>> items) async {
+  // Phase 4.6.1 (NEW-F-01): optional actor attribution for the purchase
+  // movement audit rows created inside this transaction.
+  static Future<int> insertPurchaseInvoice(
+    Map<String, dynamic> invoice,
+    List<Map<String, dynamic>> items, {
+    int? userId,
+    String? userName,
+  }) async {
     final db = await database;
     return await db.transaction((txn) async {
       // 1. Insert Invoice
@@ -1436,6 +1474,7 @@ class DatabaseHelper {
             'cost_price_at_action': averageCost,
             'reference_type': 'purchase_invoice',
             'reference_id': invoiceId,
+            'note': jsonEncode(actorNoteForInventory(userId, userName)),
           });
         }
 
