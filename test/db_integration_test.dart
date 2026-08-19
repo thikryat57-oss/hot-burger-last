@@ -930,5 +930,38 @@ void main() {
       expect(s['cogs'], 102.0);
       expect(s['grossProfit'], 0.0 - 102.0);
     });
+
+    // Independent input-validation tests (separate from the calculator tests
+    // above — a discount > subtotal and insufficient stock are rejected at the
+    // createInvoice validation gate, before any financial computation runs,
+    // and must never write partial rows to the database.)
+    test('TEST 15 — discount greater than subtotal is rejected at the validation gate', () async {
+      final env = await _seed(db);
+      final items15 = [CartItem(productId: env.burger, productName: 'Burger', quantity: 1, price: 25.0)];
+      await expectLater(
+        () => env.provider.createInvoice(
+          _makeInvoice(number: 'INV-15', items: items15, discount: 999.0),
+          items15,
+        ),
+        throwsException,
+      );
+      expect(await db.query('invoices'), isEmpty);
+      expect(await db.query('invoice_items'), isEmpty);
+    });
+
+    test('TEST 16 — insufficient ingredient stock is rejected at the validation gate', () async {
+      final env = await _seed(db, beefStock: 50); // needs 100 beef per burger
+      final items16 = [CartItem(productId: env.burger, productName: 'Burger', quantity: 1, price: 25.0)];
+      await expectLater(
+        () => env.provider.createInvoice(
+          _makeInvoice(number: 'INV-16', items: items16, discount: 0.0),
+          items16,
+        ),
+        throwsException,
+      );
+      expect(await db.query('invoices'), isEmpty);
+      expect(await db.query('invoice_items'), isEmpty);
+      expect(await inventoryLevel(db, env.beef), 50.0);
+    });
   });
 }
