@@ -100,8 +100,14 @@ class InvoiceFinancials {
   /// COGS including the legacy recipe-cost fallback for pre-snapshot items.
   final double cogsWithFallback;
 
-  /// Discount allocated to each line item (sum == [discount]).
-  final Map<int, double> discountAllocations;
+  /// Discount allocated to each line item, keyed by productId, with one
+  /// double per line of that product in line order
+  /// (sum == min(discount, total gross)).
+  final Map<int, List<double>> discountAllocations;
+
+  /// The invoice discount after clamping to [0, total gross].
+  double get effectiveDiscount =>
+      math.min(math.max(_clean(discount), 0.0), _clean(subtotal));
 
   /// Discounted gross profit for the invoice: net revenue minus COGS.
   double get grossProfit => netRevenue - cogs;
@@ -190,47 +196,63 @@ class FinancialSummary {
 /// Allocates [discount] across [lines] proportionally to each line's
 /// contribution to [gross] (the sum of the lines' totals), rounding each
 /// allocation to [decimals] places and assigning the remaining last penny
-/// to the line with the largest total. The returned map sums exactly to
-/// [discount].
+/// to the line with the largest total. The returned list sums exactly to
+/// the effective discount and matches [lines] one-to-one by position.
 ///
-/// When [gross] is zero (or the discount is zero/negative), all allocations
-/// are zero. Negative quantities clamp to zero.
-Map<int, double> allocateDiscount(List<FinancialLineItem> lines, double discount,
+/// An invoice discount can never exceed total gross sales, so [discount] is
+/// clamped to [0, totalGross] (`effectiveDiscount = clamp(discount, 0, g)`).
+/// This guarantees allocations never exceed revenue and net revenue can
+/// never become negative because of the discount. When the discount is
+/// zero or negative, all allocations are zero.
+///
+/// The result is intentionally a `Map<int, List<double>>` keyed by
+/// `productId` whose **value lists preserve per-line order**: the entry for
+/// a productId contains one double per line of that product, in the same
+/// order as those lines appear in [lines]. This keeps allocations bound to
+/// line items and prevents overwrite/loss when the same productId occurs on
+/// multiple lines of one invoice.
+Map<int, List<double>> allocateDiscount(List<FinancialLineItem> lines, double discount,
     {double gross = 0.0, int decimals = 2}) {
-  if (lines.isEmpty) return <int, double>{};
+  if (lines.isEmpty) return <int, List<double>>{};
   discount = _clean(discount);
-  if (discount <= 0) {
-    return {for (final line in lines) line.productId: 0.0};
-  }
-  final g = gross > 0 ? _clean(gross) : _lineGrossTotal(lines);
-  if (g <= 0) {
-    return {for (final line in lines) line.productId: 0.0};
+  final g = _clean(gross > 0 ? gross : _lineGrossTotal(lines));
+  if (discount <= 0 || g <= 0) {
+    return {for (final line in lines) line.productId: <double>[]};
   }
 
+  // Effective discount: a discount may never exceed total gross sales.
+  final effective = math.min(_clean(discount), g);
+
   final scale = math.pow(10, decimals).toDouble();
-  var remaining = (discount * scale).round();
-  final allocations = <int, int>{};
+  var remaining = (effective * scale).round();
+  // Per-line (in units of the smallest currency fraction), in line order.
+  final lineAllocUnits = List<int>.filled(lines.length, 0);
 
   // Sort-by-weight assignment order: largest items first for deterministic
   // last-penny tie-breaking.
-  final sorted = lines.toList()
-    ..sort((a, b) => b.total.compareTo(a.total));
-  for (final line in sorted) {
+  final sortedIndices = lines.toList().asMap().entries.toList()
+    ..sort((a, b) => b.value.total.compareTo(a.value.total));
+  for (final entry in sortedIndices) {
+    final idx = entry.key;
+    final line = entry.value;
     final contribution = _clean(line.total) / g;
-    final raw = discount * contribution;
+    final raw = effective * contribution;
     final assigned = (raw * scale).round();
     final actual = math.min(assigned, math.max(remaining, 0));
-    allocations[line.productId] = actual;
+    lineAllocUnits[idx] = actual;
     remaining -= actual;
   }
   // Last-penny assignment to the largest line (first in sorted order).
-  if (remaining != 0 && sorted.isNotEmpty) {
-    allocations[sorted.first.productId] =
-        allocations[sorted.first.productId]! + remaining;
+  if (remaining != 0 && sortedIndices.isNotEmpty) {
+    lineAllocUnits[sortedIndices.first.key] += remaining;
   }
 
-  return allocations.map((productId, units) =>
-      MapEntry(productId, units / scale));
+  final byProduct = <int, List<double>>{};
+  for (var i = 0; i < lines.length; i++) {
+    byProduct.putIfAbsent(lines[i].productId, () => <double>[])
+        .add(lineAllocUnits[i] / scale);
+  }
+  return byProduct;
 }
 
 /// Builds a per-invoice financial view for a batch of invoice rows.
@@ -262,7 +284,7 @@ InvoiceSummaryResult summarizeInvoices(
       lines: const [],
       cogs: 0,
       cogsWithFallback: 0,
-      discountAllocations: const {},
+      discountAllocations: const <int, List<double>>{},
     );
   }
 
@@ -381,11 +403,18 @@ List<Map<String, dynamic>> topProductsByDiscountedProfit(
 }) {
   final byProduct = <int, _ProductAccum>{};
   for (final f in financials) {
-    final lineGross = _lineGrossTotal(f.lines);
-    final discount = f.discount;
+    // Use the invoice's own per-line allocations (phase 1.1 hardening):
+    // Map<int, List<double>> keyed by productId with one entry per line in
+    // line order — each line keeps its own allocation even when the same
+    // productId repeats.
+    final allocsByProduct = f.discountAllocations;
+    var lineOffset = <int, int>{};
     for (final line in f.lines) {
+      final offset = lineOffset[line.productId] ?? 0;
+      final lineAllocs = allocsByProduct[line.productId] ?? const [];
       final alloc =
-          lineGross > 0 && discount > 0 ? discount * (_clean(line.total) / lineGross) : 0.0;
+          lineAllocs.length > offset ? _clean(lineAllocs[offset]) : 0.0;
+      lineOffset[line.productId] = offset + 1;
       final entry = byProduct.putIfAbsent(line.productId, () => _ProductAccum(line.productId, line.productName));
       entry.qty += math.max(line.quantity, 0);
       entry.grossProfit += _clean(line.totalProfit);

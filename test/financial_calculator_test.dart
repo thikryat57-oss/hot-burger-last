@@ -47,6 +47,11 @@ InvoiceFinancials _invoice({
   );
 }
 
+/// Sums all per-line allocations for every productId (each value is a
+/// List<double> with one entry per line of that product, phase 1.1).
+double _sumAlloc(Map<int, List<double>> alloc) =>
+    alloc.values.fold<double>(0, (s, list) => s + list.fold(0.0, (s2, v) => s2 + v));
+
 void main() {
   group('FinancialLineItem construction and defensive clamping', () {
     test('negative quantity and NaN inputs clamp to zero and do not throw', () {
@@ -93,8 +98,8 @@ void main() {
   group('allocateDiscount: proportional allocation with last penny', () {
     test('zero or negative discount yields zero allocations', () {
       final lines = [_line(productId: 1, name: 'A', quantity: 1, price: 100, total: 100)];
-      expect(allocateDiscount(lines, 0.0).values.fold<double>(0, (s, v) => s + v), 0.0);
-      expect(allocateDiscount(lines, -10.0).values.fold<double>(0, (s, v) => s + v), 0.0);
+      expect(_sumAlloc(allocateDiscount(lines, 0.0)), 0.0);
+      expect(_sumAlloc(allocateDiscount(lines, -10.0)), 0.0);
     });
 
     test('allocations sum exactly to the invoice discount', () {
@@ -103,18 +108,18 @@ void main() {
         _line(productId: 2, name: 'B', quantity: 1, price: 33.33, total: 33.33),
       ];
       final alloc = allocateDiscount(lines, 10.0);
-      final sum = alloc.values.fold<double>(0, (s, v) => s + v);
+      final sum = _sumAlloc(alloc);
       expect((sum - 10.0).abs(), lessThan(0.0005), reason: 'sum=$sum');
     });
 
     test('discount clamped to gross when discount exceeds revenue', () {
       final lines = [_line(productId: 1, name: 'A', quantity: 1, price: 100, total: 100)];
       final alloc = allocateDiscount(lines, 500.0);
-      // Each assignment is bounded by remaining, and the largest line is the
-      // only one present, so it absorbs all remaining units up to discount.
-      // The implementation does not cap to line total; it caps to remaining.
-      // Verify deterministic behaviour with an explicit assertion:
-      expect(alloc[1], 500.0);
+      // Phase 1.1 hardening: the effective discount is clamped to total
+      // gross, so the sum of all allocations is 100 (not 500) and net
+      // revenue can never go negative because of the discount.
+      expect(_sumAlloc(alloc), 100.0);
+      expect(alloc[1]!.single, 100.0);
     });
 
     test('larger lines receive at least as much allocation as smaller lines', () {
@@ -123,7 +128,7 @@ void main() {
         _line(productId: 2, name: 'Small', quantity: 1, price: 20, total: 20),
       ];
       final alloc = allocateDiscount(lines, 12.0);
-      expect(alloc[1]!, greaterThan(alloc[2]!));
+      expect(alloc[1]!.single, greaterThan(alloc[2]!.single));
     });
 
     test('empty lines return empty map', () {
@@ -310,6 +315,9 @@ void main() {
       final discounted = top.first['discountedProfit'] as double;
       final alloc = 30.0 * (100.0 / 150.0);
       expect(discounted, closeTo(60.0 - alloc, 0.0005));
+      // Phase 1.1: the line's own allocation comes from the invoice's
+      // per-line allocation list and sums correctly across lines.
+      expect(_sumAlloc(f1.discountAllocations), closeTo(30.0, 0.0005));
     });
 
     test('discounted profits across products approximate aggregate discounted profit', () {
@@ -337,6 +345,150 @@ void main() {
               acc + math.max(line.quantity, 0) * math.max(line.price - line.unitProfit, 0.0));
       final expected = f1.netRevenue - fallbackCogs;
       expect((sum - expected).abs(), lessThan(0.005), reason: 'sum=$sum expected=$expected');
+    });
+  });
+
+  group('Phase 1.1 hardening: discount > gross', () {
+    test('requested discount 500 on gross 100 is clamped to 100 (net never negative)', () {
+      final lines = [_line(productId: 1, name: 'A', quantity: 1, price: 100, total: 100)];
+      final alloc = allocateDiscount(lines, 500.0);
+      // Effective discount = clamp(500, 0, 100) = 100.
+      expect(_sumAlloc(alloc), 100.0);
+      // Net revenue can never become negative because of the discount:
+      // net = gross - effectiveDiscount = 0, not -400.
+    });
+
+    test('discount exactly equal to gross yields net revenue zero', () {
+      final lines = [_line(productId: 1, name: 'A', quantity: 1, price: 100, total: 100)];
+      final alloc = allocateDiscount(lines, 100.0);
+      expect(_sumAlloc(alloc), 100.0);
+    });
+
+    test('discount slightly above gross (101 on 100) clamps to 100', () {
+      final lines = [_line(productId: 1, name: 'A', quantity: 1, price: 100, total: 100)];
+      final alloc = allocateDiscount(lines, 101.0);
+      expect(_sumAlloc(alloc), 100.0);
+    });
+
+    test('zero gross with any discount yields zero allocations', () {
+      final lines = [_line(productId: 1, name: 'A', quantity: 1, price: 0, total: 0)];
+      final alloc = allocateDiscount(lines, 100.0);
+      expect(_sumAlloc(alloc), 0.0);
+    });
+
+    test('negative discount never produces negative allocations', () {
+      final lines = [
+        _line(productId: 1, name: 'A', quantity: 1, price: 50, total: 50),
+        _line(productId: 2, name: 'B', quantity: 1, price: 50, total: 50),
+      ];
+      final alloc = allocateDiscount(lines, -25.0);
+      for (final list in alloc.values) {
+        for (final v in list) {
+          expect(v, greaterThanOrEqualTo(0.0), reason: 'v=$v');
+        }
+      }
+      expect(_sumAlloc(alloc), 0.0);
+    });
+
+    test('InvoiceFinancials.effectiveDiscount exposes the clamped value', () {
+      final lines = [_line(productId: 1, name: 'A', quantity: 1, price: 100, total: 100)];
+      expect(_invoice(id: 1, subtotal: 100, discount: 500, net: 0, lines: lines).effectiveDiscount, 100.0);
+      expect(_invoice(id: 2, subtotal: 100, discount: -10, net: 100, lines: lines).effectiveDiscount, 0.0);
+      expect(_invoice(id: 3, subtotal: 100, discount: 50, net: 50, lines: lines).effectiveDiscount, 50.0);
+    });
+  });
+
+  group('Phase 1.1 hardening: duplicate product IDs keep per-line allocations', () {
+    test('two lines with the same productId each keep their own allocation (no overwrite)', () {
+      final lines = [
+        _line(productId: 100, name: 'X', quantity: 1, price: 100, total: 100, unitProfit: 40),
+        _line(productId: 100, name: 'X', quantity: 2, price: 50, total: 200, unitProfit: 20),
+      ];
+      final alloc = allocateDiscount(lines, 30.0);
+      // One List<double> entry per line, both under productId 100.
+      expect(alloc[100], hasLength(2));
+      final sum = _sumAlloc(alloc);
+      expect((sum - 30.0).abs(), lessThan(0.0005), reason: 'sum=$sum');
+      // Line 0 gross=100, line 1 gross=200 → allocations 10 and 20.
+      expect(alloc[100]![0], closeTo(10.0, 0.0005));
+      expect(alloc[100]![1], closeTo(20.0, 0.0005));
+    });
+
+    test('per-line discounted profits preserved by topProductsByDiscountedProfit', () {
+      final lines = [
+        _line(productId: 100, name: 'X', quantity: 1, price: 100, total: 100, unitProfit: 40, totalProfit: 40),
+        _line(productId: 100, name: 'X', quantity: 2, price: 50, total: 200, unitProfit: 20, totalProfit: 40),
+      ];
+      final inv = _invoice(id: 1, subtotal: 300, discount: 30, net: 270, lines: lines);
+      final top = topProductsByDiscountedProfit([inv], limit: 5);
+      expect(top, hasLength(1));
+      // Both lines keep independent allocations: 40 - 10 and 2*(20) - 20 = 30 + 20 = 50.
+      final discounted = top.first['discountedProfit'] as double;
+      expect(discounted, closeTo(50.0, 0.0005), reason: 'discounted=$discounted');
+      expect(top.first['qty'], 3);
+    });
+
+    test('three lines: pid 10, pid 10, pid 20 — every line keeps its allocation', () {
+      final lines = [
+        _line(productId: 10, name: 'A', quantity: 1, price: 100, total: 100),
+        _line(productId: 10, name: 'A', quantity: 1, price: 50, total: 50),
+        _line(productId: 20, name: 'B', quantity: 1, price: 150, total: 150),
+      ];
+      final alloc = allocateDiscount(lines, 30.0);
+      // Total gross = 300: line0 10, line1 5, line2 15.
+      expect(alloc[10], hasLength(2));
+      expect(alloc[10]![0], closeTo(10.0, 0.0005));
+      expect(alloc[10]![1], closeTo(5.0, 0.0005));
+      expect(alloc[20], hasLength(1));
+      expect(alloc[20]![0], closeTo(15.0, 0.0005));
+      expect(_sumAlloc(alloc), closeTo(30.0, 0.0005));
+    });
+
+    test('very small fractional amounts round safely', () {
+      final lines = [
+        _line(productId: 1, name: 'A', quantity: 1, price: 0.01, total: 0.01),
+        _line(productId: 2, name: 'B', quantity: 1, price: 0.02, total: 0.02),
+      ];
+      final alloc = allocateDiscount(lines, 0.005);
+      // 0.005 rounds to 0.01 (1 unit of the smallest fraction, assigned to
+      // the largest line). Allocations can never exceed the rounded
+      // effective discount and stay non-negative.
+      expect(_sumAlloc(alloc), closeTo(0.01, 0.0005));
+      for (final list in alloc.values) {
+        for (final v in list) {
+          expect(v, greaterThanOrEqualTo(0.0));
+        }
+      }
+    });
+
+    test('proportional rounding fractions resolve with last-penny rule', () {
+      final lines = [
+        _line(productId: 1, name: 'A', quantity: 1, price: 10.01, total: 10.01),
+        _line(productId: 2, name: 'B', quantity: 1, price: 10.0, total: 10.0),
+        _line(productId: 3, name: 'C', quantity: 1, price: 10.0, total: 10.0),
+      ];
+      final alloc = allocateDiscount(lines, 3.0);
+      final sum = _sumAlloc(alloc);
+      expect((sum - 3.0).abs(), lessThan(0.0005), reason: 'sum=$sum');
+    });
+
+    test('aggregate discounted profit equals sum of per-line discounted profits with duplicates', () {
+      final inv = _invoice(
+        id: 1,
+        subtotal: 300,
+        discount: 30,
+        net: 270,
+        lines: [
+          _line(productId: 100, name: 'X', quantity: 1, price: 100, total: 100, unitProfit: 40, totalProfit: 40),
+          _line(productId: 100, name: 'X', quantity: 2, price: 50, total: 200, unitProfit: 20, totalProfit: 40),
+        ],
+      );
+      final summary = aggregateSummary([inv]);
+      final top = topProductsByDiscountedProfit([inv], limit: 10);
+      final topSum = top.fold<double>(0, (s, m) => s + m['discountedProfit'] as double);
+      // Gross item profit 80 - effective discount 30 = 50.
+      expect(summary.grossProfit, closeTo(270.0 - 0.0, 0.0005));
+      expect(topSum, closeTo(50.0, 0.0005), reason: 'topSum=$topSum');
     });
   });
 }
