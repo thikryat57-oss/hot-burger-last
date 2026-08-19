@@ -235,7 +235,10 @@ void main() {
         'quantity_before': 1000.0,
         'quantity_after': 900.0,
       });
-      // Beef after the legacy sale: 900.
+      // The manual legacy sale only wrote audit rows, not the physical
+      // inventory; align it so the return restores on a consistent state.
+      await db.update('inventory', {'quantity': 900.0},
+          where: 'id = ?', whereArgs: [env.beef]);
       expect(await inventoryLevel(db, env.beef), 900.0);
 
       // Change the recipe to 150g AFTER the legacy sale.
@@ -244,7 +247,7 @@ void main() {
 
       // Legacy return: falls back to the current recipe (150g) — documented
       // trade-off; the audit row must warn (contains_legacy).
-      // beef: 10 - 100 (legacy sale) + 150 (fallback restore) = 60.
+      // beef: 1000 - 100 (legacy sale) + 150 (fallback restore) = 1050.
       await env.provider.returnInvoice(invId);
       expect(await inventoryLevel(db, env.beef), 1050.0);
       final auditRows = await db.query('inventory_audit_log',

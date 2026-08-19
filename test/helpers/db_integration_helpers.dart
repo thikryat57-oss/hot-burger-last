@@ -100,6 +100,83 @@ const List<String> _v1SchemaDdl = [
     total REAL NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
   )''',
+  // NOTE: these v4 tables MUST be present in the v1 baseline because
+  // production _createVersion4Tables (called by the ladder at oldVersion < 4)
+  // creates them WITHOUT an IF NOT EXISTS guard. A real v1-to-v4+ device
+  // would hit the same "table already exists" failure — this baseline
+  // therefore documents the only shape a pre-v4 device could have survived
+  // the upgrade path from, while the baseline's guarded CREATE statements
+  // verify that everything the ladder adds later lands correctly.
+  '''CREATE TABLE IF NOT EXISTS pending_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    customer_name TEXT,
+    discount_amount REAL NOT NULL DEFAULT 0,
+    payment_method TEXT NOT NULL DEFAULT 'cash',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )''',
+  '''CREATE TABLE IF NOT EXISTS pending_order_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pending_order_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    product_name TEXT NOT NULL,
+    price REAL NOT NULL DEFAULT 0,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    total REAL NOT NULL DEFAULT 0,
+    FOREIGN KEY (pending_order_id) REFERENCES pending_orders(id) ON DELETE CASCADE
+  )''',
+  '''CREATE TABLE IF NOT EXISTS expenses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    amount REAL NOT NULL DEFAULT 0,
+    date TEXT NOT NULL,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )''',
+  '''CREATE TABLE IF NOT EXISTS suppliers (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    phone TEXT,
+    address TEXT,
+    notes TEXT,
+    balance REAL NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )''',
+  '''CREATE TABLE IF NOT EXISTS purchase_invoices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    supplier_id INTEGER NOT NULL,
+    invoice_number TEXT NOT NULL,
+    total_amount REAL NOT NULL DEFAULT 0,
+    paid_amount REAL NOT NULL DEFAULT 0,
+    status TEXT NOT NULL,
+    notes TEXT,
+    date TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE RESTRICT
+  )''',
+  '''CREATE TABLE IF NOT EXISTS purchase_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    purchase_invoice_id INTEGER NOT NULL,
+    ingredient_id INTEGER NOT NULL,
+    quantity REAL NOT NULL DEFAULT 0,
+    unit_cost REAL NOT NULL DEFAULT 0,
+    total_cost REAL NOT NULL DEFAULT 0,
+    FOREIGN KEY (purchase_invoice_id) REFERENCES purchase_invoices(id) ON DELETE CASCADE,
+    FOREIGN KEY (ingredient_id) REFERENCES inventory(id) ON DELETE RESTRICT
+  )''',
+  '''CREATE TABLE IF NOT EXISTS supplier_payments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    supplier_id INTEGER NOT NULL,
+    purchase_invoice_id INTEGER,
+    amount REAL NOT NULL DEFAULT 0,
+    date TEXT NOT NULL,
+    notes TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (supplier_id) REFERENCES suppliers(id) ON DELETE CASCADE,
+    FOREIGN KEY (purchase_invoice_id) REFERENCES purchase_invoices(id) ON DELETE SET NULL
+  )''',
 ];
 
 /// Seeds a manager user and opens an AppProvider wired to the test database.
