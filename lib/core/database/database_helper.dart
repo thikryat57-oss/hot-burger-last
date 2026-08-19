@@ -776,7 +776,7 @@ class DatabaseHelper {
   /// - Unused ingredient => allowed; still audited (`note` records which path).
   /// Every outcome (delete + audit, or block) happens inside ONE transaction
   /// so a failure rolls back both the deletion and any audit row together.
-  static Future<int> deleteIngredientSafe(int id, {bool force = false}) async {
+  static Future<int> deleteIngredientSafe(int id, {bool force = false, int? userId, String? userName, String? reason}) async {
     final db = await database;
     return await db.transaction((txn) async {
       final current = await txn.query(
@@ -842,7 +842,13 @@ class DatabaseHelper {
             .toList(),
         'override': force,
         'links_explicitly_removed': links.isNotEmpty && force,
+        ..._auditActor(userId, userName),
+        ..._auditReason(reason),
       };
+      // Test-only audit failure injection (Phase 4.3.1.1 atomicity proof).
+      if (_testFailAudit) {
+        throw StateError('TEST HOOK: injected audit write failure');
+      }
       await txn.insert('inventory_audit_log', {
         'action_date': DateTime.now().toIso8601String(),
         'action_type': 'ingredient_deleted',
@@ -970,7 +976,7 @@ class DatabaseHelper {
   /// transaction and logs the previous quantity so the change is provable
   /// (L-4: traceability for recipe edits).
   static Future<int> deleteProductIngredientSafe(
-    int productId, int ingredientId, {int? userId, String? userName}
+    int productId, int ingredientId, {int? userId, String? userName, String? reason}
   ) async {
     final db = await database;
     return await db.transaction((txn) async {
@@ -998,9 +1004,13 @@ class DatabaseHelper {
         'product_id': productId,
         'ingredient_id': ingredientId,
         'previous_quantity': previousQty,
-        'user_id': userId,
-        'user_name': userName,
+        ..._auditActor(userId, userName),
+        ..._auditReason(reason),
       };
+      // Test-only audit failure injection (Phase 4.3.1.1 atomicity proof).
+      if (_testFailAudit) {
+        throw StateError('TEST HOOK: injected audit write failure');
+      }
       await txn.insert('inventory_audit_log', {
         'action_date': DateTime.now().toIso8601String(),
         'action_type': 'recipe_link_deleted',
@@ -1022,7 +1032,7 @@ class DatabaseHelper {
   /// are READ first and recorded in the audit note; only then is the product
   /// row removed (SQLite CASCADE then cleans the links, but their exact ids
   /// are already provably documented).
-  static Future<int> deleteProductSafe(int productId, {int? userId, String? userName}) async {
+  static Future<int> deleteProductSafe(int productId, {int? userId, String? userName, String? reason}) async {
     final db = await database;
     return await db.transaction((txn) async {
       final product = await txn.query(
@@ -1044,9 +1054,13 @@ class DatabaseHelper {
         'affected_ingredient_ids':
             links.map((l) => (l['ingredient_id'] as num).toInt()).toList(),
         'link_count': links.length,
-        'user_id': userId,
-        'user_name': userName,
+        ..._auditActor(userId, userName),
+        ..._auditReason(reason),
       };
+      // Test-only audit failure injection (Phase 4.3.1.1 atomicity proof).
+      if (_testFailAudit) {
+        throw StateError('TEST HOOK: injected audit write failure');
+      }
       await txn.insert('inventory_audit_log', {
         'action_date': DateTime.now().toIso8601String(),
         'action_type': 'product_deleted',
@@ -1069,7 +1083,7 @@ class DatabaseHelper {
   /// is financial history and must never be silently CASCADE-erased. Purchase
   /// invoices are already protected by RESTRICT; surfaced here with the same
   /// clear message before SQLite even rejects it.
-  static Future<int> deleteSupplierSafe(int supplierId) async {
+  static Future<int> deleteSupplierSafe(int supplierId, {int? userId, String? userName, String? reason}) async {
     final db = await database;
     return await db.transaction((txn) async {
       final supplier = await txn.query(
@@ -1109,7 +1123,13 @@ class DatabaseHelper {
         'supplier_name': name,
         'payment_records_at_delete': paymentCount,
         'purchase_invoices_at_delete': invoiceCount,
+        ..._auditActor(userId, userName),
+        ..._auditReason(reason),
       };
+      // Test-only audit failure injection (Phase 4.3.1.1 atomicity proof).
+      if (_testFailAudit) {
+        throw StateError('TEST HOOK: injected audit write failure');
+      }
       await txn.insert('inventory_audit_log', {
         'action_date': DateTime.now().toIso8601String(),
         'action_type': 'supplier_deleted',
@@ -1129,7 +1149,7 @@ class DatabaseHelper {
 
   /// Phase 4.1: expense deletion with audit (L-4). Reads the expense row first
   /// so the deleted amount/name remain provable in the audit trail.
-  static Future<int> deleteExpenseSafe(int expenseId) async {
+  static Future<int> deleteExpenseSafe(int expenseId, {int? userId, String? userName, String? reason}) async {
     final db = await database;
     return await db.transaction((txn) async {
       final expense = await txn.query(
@@ -1148,7 +1168,13 @@ class DatabaseHelper {
         'expense_name': name,
         'deleted_amount': amount,
         'deleted_date': date,
+        ..._auditActor(userId, userName),
+        ..._auditReason(reason),
       };
+      // Test-only audit failure injection (Phase 4.3.1.1 atomicity proof).
+      if (_testFailAudit) {
+        throw StateError('TEST HOOK: injected audit write failure');
+      }
       await txn.insert('inventory_audit_log', {
         'action_date': DateTime.now().toIso8601String(),
         'action_type': 'expense_deleted',
@@ -1246,6 +1272,19 @@ class DatabaseHelper {
   // Minimal SQLite integration test infrastructure (Phase 2.3).
   static Database? _testDatabase;
 
+  /// Test-only audit failure injection (Phase 4.3.1.1 atomicity proof).
+  /// When true, every safe-delete audit INSERT throws inside the transaction
+  /// AFTER the DELETE has been queued — proving the two share one txn.
+  static bool _testFailAudit = false;
+  /// Test-only setter — production never uses it.
+  static void setTestAuditFailure(bool value) {
+    _testFailAudit = value;
+  }
+  /// Resets BOTH injected database and the audit failure flag.
+  static void resetTestAuditFailure() {
+    _testFailAudit = false;
+  }
+
   /// Redirects the static `database` funnel to an injected test instance.
   /// Production code NEVER calls this; tests reset it in tearDown.
   static void useTestDatabase(Database? db) {
@@ -1284,10 +1323,35 @@ class DatabaseHelper {
   static Future<void> resetForTest() async {
     await _testDatabase?.close();
     _testDatabase = null;
+    resetTestAuditFailure();
     if (_database != null) {
       await _database!.close();
       _database = null;
     }
+  }
+
+  // ==================== PHASE 4.3.1.1 — UNIFIED AUDIT ATTRIBUTION ====================
+  // F-01/F-02 closure: every safe-delete audit note carries the actor who
+  // executed the deletion (user_id/user_name) and, only when a REAL
+  // non-whitespace reason was provided, the exact key deletion_reason.
+  // Reason keys are NEVER fabricated: empty/whitespace/null reasons produce
+  // no deletion_reason entry at all.
+  static const String kAuditActorIdKey = 'user_id';
+  static const String kAuditActorNameKey = 'user_name';
+  static const String kAuditDeletionReasonKey = 'deletion_reason';
+
+  /// Actor attribution map. Keys are always present (even if null), which is
+  /// exactly what F-02 requires: the note never silently omits the actor.
+  static Map<String, dynamic> _auditActor(int? userId, String? userName) => {
+        kAuditActorIdKey: userId,
+        kAuditActorNameKey: userName,
+      };
+
+  /// Reason map: present ONLY when a real reason was given. Never invents one.
+  static Map<String, dynamic> _auditReason(String? reason) {
+    final trimmed = reason?.trim();
+    if (trimmed == null || trimmed.isEmpty) return const {};
+    return {kAuditDeletionReasonKey: trimmed};
   }
 
   // ==================== SUPPLIERS CRUD ====================

@@ -971,4 +971,209 @@ void main() {
       expect(await inventoryLevel(db, env.bread), 100.0);
     });
   });
+  // ---------- Phase 4.3.1.1: audit traceability closure (F-01/F-02) ----------
+  // Proves the minimum safe patch: unified actor attribution + real,
+  // non-fabricated deletion reason in the audit note; single-transaction
+  // atomicity between the DELETE and its audit row; backward compatibility
+  // with old plain-text notes; no fabricated reasons.
+  group('Phase 4.3.1.1 - audit traceability closure', () {
+    late Database db;
+    setUp(() async {
+      db = await openIntegrationTestDatabase();
+      DatabaseHelper.useTestDatabase(db);
+    });
+    tearDown(() async {
+      DatabaseHelper.resetForTest();
+    });
+
+    Future<List<Map<String, dynamic>>> _auditRows(String actionType) =>
+        db.query('inventory_audit_log',
+            where: 'action_type = ?', whereArgs: [actionType]);
+
+    /// Logs a real user in so the identity flows into every delete.
+    Future<void> _login(
+        AppProvider provider, String name, String role, String password) async {
+      final userId = await db.insert('users', {
+        'name': name,
+        'password': '',
+        'password_hash': '',
+        'password_salt': '',
+        'role': role,
+        'is_active': 1,
+      });
+      // Legacy plain-text auth path: seed the legacy password column too so
+      // the login() legacy-branch succeeds for the test user.
+      await db.update('users', {'password': password},
+          where: 'id = ?', whereArgs: [userId]);
+      final ok = await provider.login(password, userId: userId);
+      expect(ok, isTrue);
+      expect(provider.currentUser?.id, userId);
+      expect(provider.currentUser?.name, name);
+    }
+
+    void _expectActor(String note, int? userId, String? userName) {
+      expect(note.contains('"user_id":$userId'), isTrue);
+      expect(note.contains('"user_name":"$userName"'), isTrue);
+    }
+
+    void _expectReason(String note, String reason) {
+      expect(note.contains('"deletion_reason":"$reason"'), isTrue);
+    }
+
+    void _expectNoReason(String note) {
+      expect(note.contains('deletion_reason'), isFalse);
+    }
+
+    test('F-02: ingredient delete records the actor who executed it', () async {
+      final env = await _seed(db);
+      await _login(env.provider, 'Manager Ali', 'manager', '1234');
+      final result = await env.provider.deleteIngredient(env.beef, force: true);
+      expect(result, 1);
+      final audit = await _auditRows('ingredient_deleted');
+      expect(audit, hasLength(1));
+      final note = audit.first['note']?.toString() ?? '';
+      _expectActor(note, env.provider.currentUser?.id, 'Manager Ali');
+    });
+
+    test('F-02: supplier + expense deletes record the actor (previously silent)', () async {
+      final env = await _seed(db);
+      await _login(env.provider, 'Manager Sara', 'manager', '1234');
+
+      final supplierId = await db.insert('suppliers', {'name': 'Supplier Q'});
+      final s = await env.provider.deleteSupplier(supplierId);
+      expect(s, 1);
+      final supplierAudit = await _auditRows('supplier_deleted');
+      expect(supplierAudit, hasLength(1));
+      _expectActor(supplierAudit.first['note']?.toString() ?? '',
+          env.provider.currentUser?.id, 'Manager Sara');
+
+      final expenseId = await db.insert('expenses', {'name': 'مصاريف', 'amount': 33.0, 'date': '2026-03-01'});
+      final e = await env.provider.deleteExpense(expenseId);
+      expect(e, 1);
+      final expenseAudit = await _auditRows('expense_deleted');
+      expect(expenseAudit, hasLength(1));
+      _expectActor(expenseAudit.first['note']?.toString() ?? '',
+          env.provider.currentUser?.id, 'Manager Sara');
+    });
+
+    test('F-01: a real deletion reason is written under the exact deletion_reason key', () async {
+      final env = await _seed(db);
+      await _login(env.provider, 'Manager Rami', 'manager', '1234');
+      final supplierId = await db.insert('suppliers', {'name': 'Supplier R'});
+      await env.provider.deleteSupplier(supplierId, reason: 'المورد لم يعد يتعامل معنا');
+      final audit = await _auditRows('supplier_deleted');
+      final note = audit.first['note']?.toString() ?? '';
+      _expectReason(note, 'المورد لم يعد يتعامل معنا');
+      _expectActor(note, env.provider.currentUser?.id, 'Manager Rami');
+    });
+
+    test('F-01: empty/whitespace reasons are NEVER written (no fabricated reason)', () async {
+      final env = await _seed(db);
+      await _login(env.provider, 'Manager Lama', 'manager', '1234');
+      final supplierId = await db.insert('suppliers', {'name': 'Supplier S'});
+      await env.provider.deleteSupplier(supplierId, reason: '   ');
+      final a1 = await _auditRows('supplier_deleted');
+      _expectNoReason(a1.first['note']?.toString() ?? '');
+
+      final expenseId = await db.insert('expenses', {'name': 'مصاريف2', 'amount': 11.0, 'date': '2026-03-02'});
+      await env.provider.deleteExpense(expenseId, reason: '');
+      final a2 = await _auditRows('expense_deleted');
+      _expectNoReason(a2.first['note']?.toString() ?? '');
+
+      // And no-argument deletes never gain a fake reason either.
+      final unused = await seedIngredient(db, 'sugar', 10.0);
+      await env.provider.deleteIngredient(unused);
+      final a3 = await _auditRows('ingredient_deleted');
+      _expectNoReason(a3.first['note']?.toString() ?? '');
+    });
+
+    test('F-01: reason key is identical across all five safe-delete note formats', () async {
+      final env = await _seed(db);
+      await _login(env.provider, 'Manager Omar', 'manager', '1234');
+      const reason = 'إغلاق المشروع';
+
+      await env.provider.deleteIngredient(env.beef, force: true, reason: reason);
+      await env.provider.deleteProductIngredient(env.burger, env.bread, reason: reason);
+      await env.provider.deleteProduct(env.burger, reason: reason);
+      final supplierId = await db.insert('suppliers', {'name': 'Supplier T'});
+      await env.provider.deleteSupplier(supplierId, reason: reason);
+      final expenseId = await db.insert('expenses', {'name': 'مصاريف3', 'amount': 7.0, 'date': '2026-03-03'});
+      await env.provider.deleteExpense(expenseId, reason: reason);
+
+      final all = await db.query('inventory_audit_log');
+      expect(all, hasLength(5));
+      for (final row in all) {
+        _expectReason(row['note']?.toString() ?? '', reason);
+      }
+    });
+
+    test('DELETE + audit stay in one transaction: a failed audit roll-backs the deletion', () async {
+      final env = await _seed(db);
+      await _login(env.provider, 'Manager Yara', 'manager', '1234');
+
+      DatabaseHelper.setTestAuditFailure(true);
+      addTearDown(() => DatabaseHelper.resetTestAuditFailure());
+
+      // Every operation must either complete fully or leave the entity intact.
+      final ops = <Future<int> Function()>[
+        () => env.provider.deleteIngredient(env.beef, force: true),
+        () async => env.provider.deleteProduct(env.burger),
+        () async {
+          final supplierId = await db.insert('suppliers', {'name': 'Supplier F'});
+          return env.provider.deleteSupplier(supplierId);
+        },
+        () async {
+          final expenseId = await db.insert('expenses', {'name': 'مصاريفF', 'amount': 9.0, 'date': '2026-03-04'});
+          return env.provider.deleteExpense(expenseId);
+        },
+        () => env.provider.deleteProductIngredient(env.burger, env.bread),
+      ];
+
+      for (final op in ops) {
+        await expectLater(() => op(), throwsA(isA<StateError>()));
+      }
+
+      // Nothing deleted, nothing audited: the transaction aborted atomically.
+      expect(await inventoryLevel(db, env.beef), 1000.0);
+      expect(await (db.query('products', where: 'id = ?', whereArgs: [env.burger])), hasLength(1));
+      expect(await (db.query('suppliers', where: 'name = ?', whereArgs: ['Supplier F'])), hasLength(1));
+      expect(await (db.query('expenses', where: 'name = ?', whereArgs: ['مصاريفF'])), hasLength(1));
+      expect(await (db.query('product_ingredients')), hasLength(2));
+      expect(await db.query('inventory_audit_log'), isEmpty);
+    });
+
+    test('backward compatibility: old plain-text notes do not crash the parser', () async {
+      final env = await _seed(db);
+      // Insert a legacy-style audit row with a plain-text note (pre-F-01/F-02
+      // format), exactly the kind of row the read path must tolerate.
+      await db.insert('inventory_audit_log', {
+        'action_date': '2026-01-01T00:00:00.000',
+        'action_type': 'supplier_deleted',
+        'ingredient_id': null,
+        'ingredient_name': 'Legacy',
+        'quantity_before': 0,
+        'quantity_change': 0,
+        'quantity_after': 0,
+        'cost_price_at_action': 0,
+        'reference_type': 'supplier',
+        'reference_id': 99,
+        'note': 'حُذف المورد يدوياً — لا بيانات هيكلية',
+      });
+      final legacy = await _auditRows('supplier_deleted');
+      expect(legacy, hasLength(1));
+      expect(legacy.first['note'], contains('يدوياً'));
+
+      // The new-path row coexists cleanly and carries structured keys.
+      await _login(env.provider, 'Manager Zein', 'manager', '1234');
+      final supplierId = await db.insert('suppliers', {'name': 'Supplier V'});
+      await env.provider.deleteSupplier(supplierId, reason: 'سبب حقيقي');
+      final rows = await _auditRows('supplier_deleted');
+      expect(rows, hasLength(2));
+      final fresh = rows.firstWhere((r) => r['reference_id'] == supplierId);
+      final note = fresh['note']?.toString() ?? '';
+      _expectReason(note, 'سبب حقيقي');
+    });
+  });
+
 }
+

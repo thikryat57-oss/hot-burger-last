@@ -383,12 +383,13 @@ class AppProvider extends ChangeNotifier {
     return result;
   }
 
-  Future<int> deleteProduct(int id) async {
+  Future<int> deleteProduct(int id, {String? reason}) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
     final result = await DatabaseHelper.deleteProductSafe(
       id,
       userId: _currentUser?.id,
       userName: _currentUser?.name,
+      reason: _normalizeReason(reason),
     );
     notifyListeners();
     return result;
@@ -1087,9 +1088,14 @@ class AppProvider extends ChangeNotifier {
     return result;
   }
 
-  Future<int> deleteExpense(int id) async {
+  Future<int> deleteExpense(int id, {String? reason}) async {
     if (!canManageFinance()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.deleteExpenseSafe(id);
+    final result = await DatabaseHelper.deleteExpenseSafe(
+      id,
+      userId: _currentUser?.id,
+      userName: _currentUser?.name,
+      reason: _normalizeReason(reason),
+    );
     notifyListeners();
     return result;
   }
@@ -1575,9 +1581,15 @@ class AppProvider extends ChangeNotifier {
   /// Phase 4.1: safe-by-default ingredient deletion. Blocks on purchase
   /// history and recipe links by default; `force` is the explicit override
   /// (the UI must already have shown the impact preview).
-  Future<int> deleteIngredient(int id, {bool force = false}) async {
+  Future<int> deleteIngredient(int id, {bool force = false, String? reason}) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.deleteIngredientSafe(id, force: force);
+    final result = await DatabaseHelper.deleteIngredientSafe(
+      id,
+      force: force,
+      userId: _currentUser?.id,
+      userName: _currentUser?.name,
+      reason: _normalizeReason(reason),
+    );
     notifyListeners();
     return result;
   }
@@ -1665,9 +1677,14 @@ class AppProvider extends ChangeNotifier {
 
   /// Phase 4.1: supplier deletion blocks permanently when financial payment
   /// records exist (L-2). Payment history is never erased, silently or not.
-  Future<int> deleteSupplier(int id) async {
+  Future<int> deleteSupplier(int id, {String? reason}) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.deleteSupplierSafe(id);
+    final result = await DatabaseHelper.deleteSupplierSafe(
+      id,
+      userId: _currentUser?.id,
+      userName: _currentUser?.name,
+      reason: _normalizeReason(reason),
+    );
     notifyListeners();
     return result;
   }
@@ -1756,15 +1773,26 @@ class AppProvider extends ChangeNotifier {
     return await DatabaseHelper.getProductIngredients(productId);
   }
 
-  Future<int> deleteProductIngredient(int productId, int ingredientId) async {
+  Future<int> deleteProductIngredient(int productId, int ingredientId, {String? reason}) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
     final result = await DatabaseHelper.deleteProductIngredientSafe(
       productId,
       ingredientId,
       userId: _currentUser?.id,
       userName: _currentUser?.name,
+      reason: _normalizeReason(reason),
     );
     await updateProductCostFromRecipe(productId);
     return result;
+  }
+
+  /// Phase 4.3.1.1 (F-01): a deletion reason is written to the audit log ONLY
+  /// when the caller provides a real (non-whitespace) reason. Never fabricates
+  /// an audit entry — an empty or missing reason leaves the note without the
+  /// `deletion_reason` key.
+  static String? _normalizeReason(String? reason) {
+    final trimmed = reason?.trim();
+    if (trimmed == null || trimmed.isEmpty) return null;
+    return trimmed;
   }
 }
