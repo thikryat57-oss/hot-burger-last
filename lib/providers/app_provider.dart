@@ -1753,7 +1753,11 @@ class AppProvider extends ChangeNotifier {
 
   Future<int> addSupplierPayment(SupplierPayment payment) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.insertSupplierPayment(payment.toMap());
+    final result = await DatabaseHelper.insertSupplierPayment(
+      payment.toMap(),
+      userId: _currentUser?.id,
+      userName: _currentUser?.name,
+    );
     notifyListeners();
     return result;
   }

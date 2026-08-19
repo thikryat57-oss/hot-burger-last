@@ -1565,7 +1565,11 @@ class DatabaseHelper {
 
   // ==================== PAYMENTS CRUD ====================
 
-  static Future<int> insertSupplierPayment(Map<String, dynamic> payment) async {
+  static Future<int> insertSupplierPayment(
+    Map<String, dynamic> payment, {
+    int? userId,
+    String? userName,
+  }) async {
     final db = await database;
     return await db.transaction((txn) async {
       payment['created_at'] = DateTime.now().toIso8601String();
@@ -1577,6 +1581,35 @@ class DatabaseHelper {
         'UPDATE suppliers SET balance = balance - ?, updated_at = ? WHERE id = ?',
         [amount, DateTime.now().toIso8601String(), payment['supplier_id']],
       );
+
+      // Audit row: every supplier payment creation is archived with its actor
+      // and a reference to the exact payment id (Phase 4.7.2 — R-04 closure).
+      final noteMap = actorNoteForInventory(
+        userId,
+        userName,
+        noteText:
+            'amount=$amount supplier_id=${payment['supplier_id']} date=${payment['date'] ?? ''} notes=${(payment['notes'] ?? '').toString().length > 60 ? (payment['notes'] as String).substring(0, 60) : (payment['notes'] ?? '')}',
+      );
+      await txn.insert('inventory_audit_log', {
+        'action_date': DateTime.now().toIso8601String(),
+        'action_type': 'supplier_payment',
+        'ingredient_id': null,
+        'ingredient_name': null,
+        'quantity_before': 0,
+        'quantity_change': 0,
+        'quantity_after': 0,
+        'cost_price_at_action': 0,
+        'reference_type': 'supplier_payment',
+        'reference_id': paymentId,
+        'note': noteMap.isEmpty ? null : jsonEncode(noteMap),
+      });
+
+      // Test-only audit failure injection (atomicity proof, Phase 4.3.1.1
+      // pattern): throws AFTER the payment + balance mutations were queued,
+      // so a rollback of the whole transaction is the only possible outcome.
+      if (_testFailAudit) {
+        throw StateError('TEST HOOK: injected audit write failure');
+      }
 
       return paymentId;
     });
