@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 import '../constants/constants.dart';
 
@@ -8,6 +9,10 @@ class DatabaseHelper {
   static Database? _database;
 
   static Future<Database> get database async {
+    // Test hook (Phase 2.3): when a test injects an isolated instance via
+    // useTestDatabase(), every static helper routes to that test database
+    // instead of lazily opening the production application database.
+    if (_testDatabase != null) return _testDatabase!;
     if (_database != null) return _database!;
     _database = await _initDatabase();
     return _database!;
@@ -893,6 +898,54 @@ class DatabaseHelper {
   }
 
   static Future<void> closeDatabase() async {
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
+  }
+
+  // ==================== TEST HOOKS (test-only, never called in production) ====================
+  // Minimal SQLite integration test infrastructure (Phase 2.3).
+  static Database? _testDatabase;
+
+  /// Redirects the static `database` funnel to an injected test instance.
+  /// Production code NEVER calls this; tests reset it in tearDown.
+  static void useTestDatabase(Database? db) {
+    _testDatabase = db;
+  }
+
+  /// Opens a brand-new isolated in-memory database with the PRODUCTION schema
+  /// and migration ladder wired to the real private handlers. `singleInstance:
+  /// false` guarantees each call returns a fresh DB regardless of prior tests.
+  static Future<Database> openTestDatabase({int? version}) async {
+    sqfliteFfiInit();
+    return await databaseFactoryFfi.openDatabase(
+      inMemoryDatabasePath,
+      options: OpenDatabaseOptions(
+        version: version ?? Constants.dbVersion,
+        onConfigure: (db) async {
+          await db.execute('PRAGMA foreign_keys = ON');
+        },
+        singleInstance: false,
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
+      ),
+    );
+  }
+
+  /// Runs the production migration ladder between two versions on the given
+  /// database (the same code every real device runs on upgrade). Public only
+  /// so tests can exercise upgrade paths directly.
+  static Future<void> migrate(Database db, int from, int to) async {
+    await _onUpgrade(db, from, to);
+  }
+
+  /// Clears all hooks and closes the production database instance so the next
+  /// `database` access re-opens the real application database. Always call
+  /// this in test tearDown.
+  static Future<void> resetForTest() async {
+    await _testDatabase?.close();
+    _testDatabase = null;
     if (_database != null) {
       await _database!.close();
       _database = null;
