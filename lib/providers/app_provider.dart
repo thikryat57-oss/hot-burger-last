@@ -385,7 +385,11 @@ class AppProvider extends ChangeNotifier {
 
   Future<int> deleteProduct(int id) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await _db!.delete('products', where: 'id = ?', whereArgs: [id]);
+    final result = await DatabaseHelper.deleteProductSafe(
+      id,
+      userId: _currentUser?.id,
+      userName: _currentUser?.name,
+    );
     notifyListeners();
     return result;
   }
@@ -952,18 +956,24 @@ class AppProvider extends ChangeNotifier {
   ///   originally deducted (`snapshot.qty × soldQty`). The current recipe is
   ///   NEVER consulted for these lines — this is the P0 fix.
   /// - Items WITHOUT a snapshot (legacy invoices created before v16): restoring
-  ///   from the current recipe would NOT be historical-safe. Those lines are
-  ///   explicitly marked `note: 'LEGACY_FALLBACK'` in the audit row so the
-  ///   quantity source is always provable from the audit log.
+  ///   from the current recipe is the ONLY recoverable source, but it is
+  ///   explicitly documented per restored link (`LEGACY_FALLBACK`) AND per
+  ///   line the restoration outcome is recorded — a line whose product has no
+  ///   current recipe links at all gets a `LEGACY_FALLBACK_NO_RECIPE_LINKS`
+  ///   audit row instead of silently restoring nothing (L-1). No legacy line
+  ///   ever leaves the audit log without a trace.
   /// - Duplicate product lines: each invoice item row carries its own
   ///   snapshot, so every line restores independently without overwriting.
+  /// Returns the list of diagnostic notes produced for legacy lines so
+  /// callers can surface them (e.g. manager report, UI warning).
   /// All mutations happen inside the caller's transaction — a failure in any
   /// step rolls back status, inventory, and audit together.
-  Future<void> restoreInventoryFromSnapshots(
+  Future<List<String>> restoreInventoryFromSnapshots(
     Transaction txn, List<Map<String, dynamic>> items, int invoiceId,
     String now, String actionType, String _notePrefix,
   ) async {
     bool anyLegacy = false;
+    final diagnostics = <String>[];
     for (final item in items) {
       final productId = item['product_id'] as int;
       final soldQty = (item['quantity'] as num).toDouble();
@@ -975,19 +985,40 @@ class AppProvider extends ChangeNotifier {
         final links = await txn.rawQuery(
           'SELECT pi.ingredient_id, pi.quantity, inv.name, inv.quantity AS current_quantity, inv.cost_price '
           'FROM product_ingredients pi INNER JOIN inventory inv ON pi.ingredient_id = inv.id WHERE pi.product_id = ?', [productId]);
-        for (final link in links) {
-          final ingredientId = link['ingredient_id'] as int;
-          final restore = (link['quantity'] as num).toDouble() * soldQty;
-          final before = (link['current_quantity'] as num).toDouble();
-          final after = before + restore;
-          await txn.update('inventory', {'quantity': after, 'updated_at': now}, where: 'id = ?', whereArgs: [ingredientId]);
+        if (links.isEmpty) {
+          // The product has NO current recipe links: restoring nothing would
+          // be silently wrong, and fabricating quantities would be false
+          // confidence. Log an explicit diagnostic audit row so this line's
+          // fate is provable from the audit log (never silent).
+          final productRows = await txn.query(
+            'products', columns: ['name'], where: 'id = ?', whereArgs: [productId],
+          );
+          final productName = productRows.isNotEmpty ? productRows.first['name'] as String? : null;
           await txn.insert('inventory_audit_log', {
-            'action_date': now, 'action_type': actionType, 'ingredient_id': ingredientId,
-            'ingredient_name': link['name'], 'quantity_before': before, 'quantity_change': restore,
-            'quantity_after': after, 'cost_price_at_action': link['cost_price'],
+            'action_date': now, 'action_type': actionType, 'ingredient_id': null,
+            'ingredient_name': productName,
+            'quantity_before': 0, 'quantity_change': 0, 'quantity_after': 0,
+            'cost_price_at_action': 0,
             'reference_type': 'invoice', 'reference_id': invoiceId,
-            'note': 'LEGACY_FALLBACK',
+            'note': 'LEGACY_FALLBACK_NO_RECIPE_LINKS',
           });
+          diagnostics.add('LEGACY_FALLBACK_NO_RECIPE_LINKS:product=$productId');
+        } else {
+          for (final link in links) {
+            final ingredientId = link['ingredient_id'] as int;
+            final restore = (link['quantity'] as num).toDouble() * soldQty;
+            final before = (link['current_quantity'] as num).toDouble();
+            final after = before + restore;
+            await txn.update('inventory', {'quantity': after, 'updated_at': now}, where: 'id = ?', whereArgs: [ingredientId]);
+            await txn.insert('inventory_audit_log', {
+              'action_date': now, 'action_type': actionType, 'ingredient_id': ingredientId,
+              'ingredient_name': link['name'], 'quantity_before': before, 'quantity_change': restore,
+              'quantity_after': after, 'cost_price_at_action': link['cost_price'],
+              'reference_type': 'invoice', 'reference_id': invoiceId,
+              'note': 'LEGACY_FALLBACK',
+            });
+          }
+          diagnostics.add('LEGACY_FALLBACK:${links.length}_links:product=$productId');
         }
         continue;
       }
@@ -1021,6 +1052,7 @@ class AppProvider extends ChangeNotifier {
         });
       }
     }
+    return diagnostics;
   }
 
   // Expense CRUD
@@ -1057,7 +1089,7 @@ class AppProvider extends ChangeNotifier {
 
   Future<int> deleteExpense(int id) async {
     if (!canManageFinance()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await _db!.delete('expenses', where: 'id = ?', whereArgs: [id]);
+    final result = await DatabaseHelper.deleteExpenseSafe(id);
     notifyListeners();
     return result;
   }
@@ -1496,11 +1528,19 @@ class AppProvider extends ChangeNotifier {
     return result;
   }
 
-  Future<int> deleteIngredient(int id) async {
+  /// Phase 4.1: safe-by-default ingredient deletion. Blocks on purchase
+  /// history and recipe links by default; `force` is the explicit override
+  /// (the UI must already have shown the impact preview).
+  Future<int> deleteIngredient(int id, {bool force = false}) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.deleteIngredient(id);
+    final result = await DatabaseHelper.deleteIngredientSafe(id, force: force);
     notifyListeners();
     return result;
+  }
+
+  /// Read-only impact detection for the UI impact-preview dialog (R-01).
+  Future<Map<String, dynamic>> getIngredientImpact(int id) async {
+    return await DatabaseHelper.getIngredientImpact(id);
   }
 
   Future<void> recordPurchase(int ingredientId, double quantity, double cost) async {
@@ -1579,9 +1619,11 @@ class AppProvider extends ChangeNotifier {
     return result;
   }
 
+  /// Phase 4.1: supplier deletion blocks permanently when financial payment
+  /// records exist (L-2). Payment history is never erased, silently or not.
   Future<int> deleteSupplier(int id) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.deleteSupplier(id);
+    final result = await DatabaseHelper.deleteSupplierSafe(id);
     notifyListeners();
     return result;
   }
@@ -1672,7 +1714,12 @@ class AppProvider extends ChangeNotifier {
 
   Future<int> deleteProductIngredient(int productId, int ingredientId) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.deleteProductIngredient(productId, ingredientId);
+    final result = await DatabaseHelper.deleteProductIngredientSafe(
+      productId,
+      ingredientId,
+      userId: _currentUser?.id,
+      userName: _currentUser?.name,
+    );
     await updateProductCostFromRecipe(productId);
     return result;
   }

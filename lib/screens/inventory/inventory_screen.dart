@@ -449,27 +449,79 @@ class _InventoryScreenState extends State<_InventoryList> {
   }
 
   Future<void> _deleteIngredient(IngredientModel ingredient) async {
+    // Phase 4.1 (R-01): impact preview — the business layer decides what is
+    // deletable; the UI only renders the preview and asks for an explicit
+    // override when the material is linked to product recipes.
+    List<Map<String, dynamic>> affected = const [];
+    int purchaseRefs = 0;
+    String blockedReason = '';
+    try {
+      final impact =
+          await context.read<AppProvider>().getIngredientImpact(ingredient.id!);
+      affected = (impact['linked_products'] as List).cast<Map<String, dynamic>>();
+      purchaseRefs = (impact['purchase_reference_count'] as num).toInt();
+      if (purchaseRefs > 0) {
+        blockedReason =
+            'هذا المكوّن مستخدم في فواتير شراء سابقة (سجل مالي) — لا يمكن حذفه.';
+      } else if (affected.isNotEmpty) {
+        blockedReason = affected.length == 1
+            ? 'هذا المكوّن مرتبط بوصفة منتج واحد.'
+            : 'هذا المكوّن مرتبط بوصفة ${affected.length} منتج.';
+      }
+    } catch (_) {
+      // Impact detection failure must never block the delete flow itself.
+    }
+
     final confirmed = await showDialog<bool>(
       useRootNavigator: true,
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('حذف المادة الخام'),
-        content: Text('هل أنت متأكد من حذف "${ingredient.name}"؟'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('هل أنت متأكد من حذف "${ingredient.name}"؟'),
+            if (blockedReason.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                blockedReason,
+                style: TextStyle(fontSize: 13, color: AppTheme.errorColor),
+              ),
+            ],
+            if (affected.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              const Text('المنتجات المتأثرة (ستُحذف روابط الوصفة):',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+              ...affected.map(
+                (a) => Padding(
+                  padding: const EdgeInsets.only(right: 8, top: 2),
+                  child: Text('• ${a['product_name'] ?? 'منتج'}',
+                      style: const TextStyle(fontSize: 13)),
+                ),
+              ),
+            ],
+          ],
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
             child: const Text('إلغاء'),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorColor),
-            child: const Text('حذف'),
-          ),
+          if (purchaseRefs == 0)
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorColor),
+              child: Text(affected.isEmpty ? 'حذف' : 'حذف نهائيًا مع الروابط'),
+            ),
         ],
       ),
     );
     if (confirmed == true && mounted) {
-      await context.read<AppProvider>().deleteIngredient(ingredient.id!);
+      await context.read<AppProvider>().deleteIngredient(
+            ingredient.id!,
+            force: affected.isNotEmpty,
+          );
       _loadData();
     }
   }

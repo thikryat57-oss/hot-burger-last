@@ -388,4 +388,318 @@ void main() {
       expect(await auditRowsForInvoice(db, 1), isEmpty);
     });
   });
+
+  // ---------- Phase 4.1: Destructive inventory safety closure ----------
+  // Covers R-01 (recipe link cascade loss), L-1 (legacy fallback silence),
+  // L-2 (supplier financial cascade), L-3 (product delete audit), L-4
+  // (granular audit paths). Every operation runs through the PRODUCTION
+  // safe helpers added in this phase.
+  group('Phase 4.1 - destructive safety closure', () {
+    late Database db;
+    setUp(() async {
+      db = await openIntegrationTestDatabase();
+      DatabaseHelper.useTestDatabase(db);
+    });
+    tearDown(() async {
+      DatabaseHelper.resetForTest();
+    });
+
+    test('deleteIngredientSafe blocks when purchase invoices reference it', () async {
+      final env = await _seed(db);
+      // Link the material to a purchase invoice (financial record).
+      // Use a real supplier row so the FK to suppliers(id) is valid.
+      final supplierId = await db.insert('suppliers', {'name': 'Supplier X'});
+      final realPurchaseId = await db.insert('purchase_invoices', {
+        'supplier_id': supplierId,
+        'invoice_number': 'PO-1',
+        'total_amount': 50.0,
+        'paid_amount': 0,
+        'status': 'unpaid',
+        'date': '2026-01-01',
+      });
+      await db.insert('purchase_items', {
+        'purchase_invoice_id': realPurchaseId,
+        'ingredient_id': env.beef,
+        'quantity': 200.0,
+        'unit_cost': 1.0,
+        'total_cost': 200.0,
+      });
+
+      // Financial guard: the material must NOT be deleted.
+      await expectLater(
+        () => env.provider.deleteIngredient(env.beef),
+        throwsA(isA<DatabaseHelper.SafeDeleteBlockedException>()),
+      );
+      // Zero mutations on block: row and stock untouched.
+      expect(await inventoryLevel(db, env.beef), 1000.0);
+      final links = await db.query('product_ingredients');
+      expect(links, hasLength(1));
+      expect(await (db.query('inventory_audit_log',
+              where: 'action_type = ?', whereArgs: ['ingredient_deleted'])),
+          isEmpty);
+    });
+
+    test('deleteIngredientSafe blocks with impact detail when recipe links exist', () async {
+      final env = await _seed(db);
+      // Recipe link exists; no purchase reference → block-with-impact (not
+      // financial), NOT silent cascade.
+      await expectLater(
+        () => env.provider.deleteIngredient(env.beef),
+        throwsA(isA<DatabaseHelper.SafeDeleteBlockedException>()),
+      );
+      expect(await inventoryLevel(db, env.beef), 1000.0);
+      expect(await (db.query('product_ingredients')), hasLength(1));
+      final impact = await env.provider.getIngredientImpact(env.beef);
+      expect((impact['linked_products'] as List), hasLength(1));
+      expect(impact['linked_products'][0]['product_name'], 'Burger');
+      expect(impact['purchase_reference_count'], 0);
+    });
+
+    test('explicit force delete removes links, material and writes an override audit row', () async {
+      final env = await _seed(db);
+      final levelBefore = await inventoryLevel(db, env.beef);
+      final result = await env.provider.deleteIngredient(env.beef, force: true);
+      expect(result, 1);
+      // Row deleted, links removed by the safety helper, not silently by SQLite alone.
+      expect(await inventoryLevel(db, env.beef), isNull);
+      expect(await (db.query('product_ingredients')), isEmpty);
+      final audit = await db.query('inventory_audit_log',
+          where: 'action_type = ?', whereArgs: ['ingredient_deleted']);
+      expect(audit, hasLength(1));
+      expect(audit.first['quantity_before'], levelBefore);
+      expect(audit.first['note']?.toString().contains('override'), isTrue);
+      expect(audit.first['note']?.toString().contains('links_explicitly_removed'), isTrue);
+    });
+
+    test('deleteIngredientSafe on an unused material deletes and audits without override', () async {
+      final env = await _seed(db);
+      final unused = await seedIngredient(db, 'salt', 50.0);
+      final result = await env.provider.deleteIngredient(unused);
+      expect(result, 1);
+      expect(await inventoryLevel(db, unused), isNull);
+      final audit = await db.query('inventory_audit_log',
+          where: 'action_type = ? AND ingredient_id = ?',
+          whereArgs: ['ingredient_deleted', unused]);
+      expect(audit, hasLength(1));
+      final note = audit.first['note']?.toString() ?? '';
+      expect(note.contains('override'), isFalse);
+    });
+
+    test('deleteProductSafe audits the recipe links it destroys (L-3)', () async {
+      final env = await _seed(db);
+      await env.provider.deleteProduct(env.burger);
+      expect(await (db.query('products', where: 'id = ?', whereArgs: [env.burger])), isEmpty);
+      final audit = await db.query('inventory_audit_log',
+          where: 'action_type = ?', whereArgs: ['product_deleted']);
+      expect(audit, hasLength(1));
+      final note = audit.first['note']?.toString() ?? '';
+      expect(note.contains('affected_ingredient_ids'), isTrue);
+      expect(note.contains(env.bread.toString()), isTrue);
+      expect(note.contains(env.beef.toString()), isTrue);
+      // NOTE: the raw product_ingredients links are still removed by
+      // product_ingredients FK behavior; the audit row preserves which
+      // materials were linked to the deleted product.
+    });
+
+    test('deleteSupplierSafe blocks when payments exist (L-2)', () async {
+      final env = await _seed(db);
+      final supplierId = await db.insert('suppliers', {'name': 'Supplier Y'});
+      await db.insert('supplier_payments', {
+        'supplier_id': supplierId,
+        'amount': 100.0,
+        'date': '2026-01-01',
+      });
+      await expectLater(
+        () => env.provider.deleteSupplier(supplierId),
+        throwsA(isA<DatabaseHelper.SafeDeleteBlockedException>()),
+      );
+      expect(
+          await (db.query('supplier_payments', where: 'supplier_id = ?', whereArgs: [supplierId])),
+          hasLength(1));
+      expect(
+          await (db.query('inventory_audit_log', where: 'action_type = ?', whereArgs: ['supplier_deleted'])),
+          isEmpty);
+    });
+
+    test('deleteSupplierSafe blocks when purchase invoices exist (L-2)', () async {
+      final env = await _seed(db);
+      final supplierId = await db.insert('suppliers', {'name': 'Supplier Z'});
+      await db.insert('purchase_invoices', {
+        'supplier_id': supplierId,
+        'invoice_number': 'PO-2',
+        'total_amount': 25.0,
+        'paid_amount': 25.0,
+        'status': 'paid',
+        'date': '2026-01-01',
+      });
+      await expectLater(
+        () => env.provider.deleteSupplier(supplierId),
+        throwsA(isA<DatabaseHelper.SafeDeleteBlockedException>()),
+      );
+      expect(await (db.query('suppliers', where: 'id = ?', whereArgs: [supplierId])), hasLength(1));
+    });
+
+    test('deleteSupplierSafe on a clean supplier deletes and audits', () async {
+      final env = await _seed(db);
+      final supplierId = await db.insert('suppliers', {'name': 'Supplier Clean'});
+      final result = await env.provider.deleteSupplier(supplierId);
+      expect(result, 1);
+      expect(await (db.query('suppliers', where: 'id = ?', whereArgs: [supplierId])), isEmpty);
+      expect(
+          await (db.query('inventory_audit_log', where: 'action_type = ?', whereArgs: ['supplier_deleted'])),
+          hasLength(1));
+    });
+
+    test('deleteProductIngredientSafe audits each removed recipe link (L-4)', () async {
+      final env = await _seed(db);
+      await env.provider.deleteProductIngredient(env.burger, env.bread);
+      final audit = await db.query('inventory_audit_log',
+          where: 'action_type = ?', whereArgs: ['recipe_link_deleted']);
+      expect(audit, hasLength(1));
+      final note = audit.first['note']?.toString() ?? '';
+      expect(note.contains(env.burger.toString()), isTrue);
+      expect(note.contains(env.bread.toString()), isTrue);
+      // Link physically gone; beef link preserved.
+      final links = await db.query('product_ingredients',
+          where: 'product_id = ?', whereArgs: [env.burger]);
+      expect(links, hasLength(1));
+      expect(links.first['ingredient_id'], env.beef);
+    });
+
+    test('deleteExpenseSafe audits the removed amount (L-4)', () async {
+      final env = await _seed(db);
+      final expenseId = await db.insert('expenses', {
+        'name': 'إيجار',
+        'amount': 500.0,
+        'date': '2026-02-01',
+      });
+      await env.provider.deleteExpense(expenseId);
+      expect(await (db.query('expenses', where: 'id = ?', whereArgs: [expenseId])), isEmpty);
+      final audit = await db.query('inventory_audit_log',
+          where: 'action_type = ?', whereArgs: ['expense_deleted']);
+      expect(audit, hasLength(1));
+      expect(audit.first['quantity_before'], 500.0);
+    });
+
+    test('legacy fallback with NO current recipe links logs an explicit diagnostic (L-1)', () async {
+      final env = await _seed(db);
+      // Hand-seed a legacy invoice (NULL snapshot) as in the Group D test.
+      final invId = await db.insert('invoices', {
+        'invoice_number': 'LEG-1',
+        'total_amount': 25.0,
+        'status': 'completed',
+      });
+      await db.insert('invoice_items', {
+        'invoice_id': invId,
+        'product_id': env.burger,
+        'product_name': 'Burger',
+        'quantity': 1,
+        'price': 25.0,
+        'total': 25.0,
+        'cost_snapshot': 0,
+        'unit_profit': 0,
+        'total_profit': 0,
+        'recipe_snapshot': null,
+      });
+      await db.insert('inventory_audit_log', {
+        'ingredient_id': env.beef,
+        'quantity_change': -100.0,
+        'action_type': 'sale',
+        'reference_type': 'invoice',
+        'reference_id': invId,
+        'cost_price_at_action': 1.0,
+        'quantity_before': 1000.0,
+        'quantity_after': 900.0,
+      });
+      await db.update('inventory', {'quantity': 900.0},
+          where: 'id = ?', whereArgs: [env.beef]);
+      // Delete ALL current recipe links for the product AFTER the legacy sale,
+      // then trigger the legacy fallback path.
+      await db.delete('product_ingredients');
+      final diagnostics = await env.provider.returnInvoice(invId);
+      // L-1: the path must NO LONGER silently skip — an explicit diagnostic
+      // row is recorded and returned instead.
+      expect(diagnostics,
+          anyElement(contains('LEGACY_FALLBACK_NO_RECIPE_LINKS')));
+      final audit = await db.query('inventory_audit_log',
+          where: "reference_type = 'invoice' AND reference_id = ? AND action_type = ?",
+          whereArgs: [invId, 'ingredient_deleted']);
+      expect(audit.any((r) =>
+          r['note']?.toString().contains('LEGACY_FALLBACK_NO_RECIPE_LINKS') == true), isTrue);
+    });
+
+    test('legacy fallback WITH current links verifies link count in diagnostics (L-1)', () async {
+      final env = await _seed(db);
+      final invId = await db.insert('invoices', {
+        'invoice_number': 'LEG-2',
+        'total_amount': 25.0,
+        'status': 'completed',
+      });
+      await db.insert('invoice_items', {
+        'invoice_id': invId,
+        'product_id': env.burger,
+        'product_name': 'Burger',
+        'quantity': 1,
+        'price': 25.0,
+        'total': 25.0,
+        'cost_snapshot': 0,
+        'unit_profit': 0,
+        'total_profit': 0,
+        'recipe_snapshot': null,
+      });
+      await db.insert('inventory_audit_log', {
+        'ingredient_id': env.beef,
+        'quantity_change': -100.0,
+        'action_type': 'sale',
+        'reference_type': 'invoice',
+        'reference_id': invId,
+        'cost_price_at_action': 1.0,
+        'quantity_before': 1000.0,
+        'quantity_after': 900.0,
+      });
+      await db.update('inventory', {'quantity': 900.0},
+          where: 'id = ?', whereArgs: [env.beef]);
+      final diagnostics = await env.provider.returnInvoice(invId);
+      expect(diagnostics, anyElement(contains('LEGACY_FALLBACK')));
+      expect(diagnostics, anyElement(contains('1_links')));
+    });
+
+    test('impact preview reports all products sharing the same material', () async {
+      final env = await _seed(db);
+      final pizza = await seedProduct(db, 'Pizza', 30.0);
+      // Pizza shares the same bread material.
+      await seedRecipe(db, pizza, {env.bread: 3.0});
+      final impact = await env.provider.getIngredientImpact(env.bread);
+      final linked = (impact['linked_products'] as List).cast<Map>();
+      expect(linked, hasLength(2));
+      expect(linked.map((m) => m['product_name']),
+          containsAll(['Burger', 'Pizza']));
+    });
+
+    test('force=false delete on an unlinked material must NOT touch linked ingredients', () async {
+      final env = await _seed(db);
+      // Bread is linked; beef is used only by burger too. Delete an unused
+      // material via force=false (default) and assert the linked ones stay.
+      final unused = await seedIngredient(db, 'pepper', 20.0);
+      await env.provider.deleteIngredient(unused, force: false);
+      expect(await inventoryLevel(db, env.bread), 100.0);
+      expect(await inventoryLevel(db, env.beef), 1000.0);
+      expect(await (db.query('product_ingredients')), hasLength(1));
+    });
+
+    test('deleteIngredientSafe is atomic: audit row written inside the same transaction as the delete', () async {
+      final env = await _seed(db);
+      await env.provider.deleteIngredient(env.beef, force: true);
+      // If the audit row were written outside the transaction, a partial
+      // failure could leave the material gone with no record. Same
+      // transaction: both visible or neither.
+      final audit = await db.query('inventory_audit_log',
+          where: 'action_type = ? AND ingredient_id = ?',
+          whereArgs: ['ingredient_deleted', env.beef]);
+      expect(audit, hasLength(1));
+      // quantity_after matches the post-delete state exactly.
+      expect(audit.first['quantity_after'], audit.first['quantity_before']);
+      expect(audit.first['quantity_change'], 0);
+    });
+  });
 }

@@ -5,6 +5,24 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:path/path.dart';
 import '../constants/constants.dart';
 
+/// Business-level guard for destructive catalog operations (Phase 4.1).
+/// Raised BEFORE any row is deleted, so the UI can render an impact preview
+/// and require an explicit override. Never thrown after mutation started.
+class SafeDeleteBlockedException implements Exception {
+  final String message;
+  final List<int> affectedProductIds;
+  final List<String> affectedProductNames;
+  const SafeDeleteBlockedException(
+    this.message, {
+    this.affectedProductIds = const [],
+    this.affectedProductNames = const [],
+  });
+  @override
+  String toString() =>
+      'SafeDeleteBlockedException: $message (affected: $affectedProductIds)';
+}
+
+
 class DatabaseHelper {
   static Database? _database;
 
@@ -717,9 +735,129 @@ class DatabaseHelper {
     return await db.update('inventory', ingredient, where: 'id = ?', whereArgs: [id]);
   }
 
+  /// Thrown when a destructive operation is blocked by the safety policy
+  /// (business-level references that SQLite CASCADE would otherwise erase
+  /// silently). `affectedProductIds` carries the exact preview the UI shows.
   static Future<int> deleteIngredient(int id) async {
     final db = await database;
     return await db.delete('inventory', where: 'id = ?', whereArgs: [id]);
+  }
+
+  // ==================== PHASE 4.1 — DESTRUCTIVE SAFETY ====================
+
+
+  /// Read-only impact detection for an ingredient: linked products and
+  /// financial purchase references. Pure reads; never mutates.
+  static Future<Map<String, dynamic>> getIngredientImpact(int id) async {
+    final db = await database;
+    final links = await db.rawQuery('''
+      SELECT pi.product_id, p.name AS product_name
+      FROM product_ingredients pi
+      INNER JOIN products p ON pi.product_id = p.id
+      WHERE pi.ingredient_id = ?
+    ''', [id]);
+    final purchaseRefs = await db.rawQuery(
+      'SELECT COUNT(*) AS c FROM purchase_items WHERE ingredient_id = ?',
+      [id],
+    );
+    return {
+      'linked_products': links,
+      'purchase_reference_count': (purchaseRefs.first['c'] as num).toInt(),
+    };
+  }
+
+  /// Safe-by-default ingredient deletion (Phase 4.1 policy):
+  /// - Financial purchase references => permanently BLOCKED (raw delete
+  ///   already fails via RESTRICT; surfaced here as a clear business error).
+  /// - Recipe links exist => BLOCKED unless `force` (explicit override):
+  ///   with override, the links are removed EXPLICITLY inside the same
+  ///   transaction, each audited with the affected product ids so nothing is
+  ///   ever erased silently by SQLite CASCADE.
+  /// - Unused ingredient => allowed; still audited (`note` records which path).
+  /// Every outcome (delete + audit, or block) happens inside ONE transaction
+  /// so a failure rolls back both the deletion and any audit row together.
+  static Future<int> deleteIngredientSafe(int id, {bool force = false}) async {
+    final db = await database;
+    return await db.transaction((txn) async {
+      final current = await txn.query(
+        'inventory',
+        columns: ['id', 'name', 'quantity', 'cost_price'],
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+      if (current.isEmpty) return 0;
+      final name = current.first['name'] as String?;
+      final beforeQty = (current.first['quantity'] as num).toDouble();
+      final costPrice = (current.first['cost_price'] as num).toDouble();
+
+      // Financial references are a hard block: erasing purchase history is
+      // a P1 integrity violation (L-2 same principle as supplier payments).
+      final purchaseRefs = await txn.rawQuery(
+        'SELECT COUNT(*) AS c FROM purchase_items WHERE ingredient_id = ?',
+        [id],
+      );
+      final purchaseCount = (purchaseRefs.first['c'] as num).toInt();
+      if (purchaseCount > 0) {
+        throw const SafeDeleteBlockedException(
+          'لا يمكن حذف المادة الخام: مستخدمة في فواتير شراء سابقة (سجل مالي)',
+        );
+      }
+
+      // Recipe links
+      final links = await txn.rawQuery('''
+        SELECT pi.product_id, p.name AS product_name
+        FROM product_ingredients pi
+        INNER JOIN products p ON pi.product_id = p.id
+        WHERE pi.ingredient_id = ?
+      ''', [id]);
+
+      if (links.isNotEmpty) {
+        if (!force) {
+          throw SafeDeleteBlockedException(
+            '${name ?? 'المادة الخام'} مرتبطة بوصفة ${links.length == 1 ? 'منتج واحد' : '${links.length} منتج'}؛ يجب حذف الروابط أولاً',
+            affectedProductIds: links
+                .map((l) => (l['product_id'] as num).toInt())
+                .toList(),
+            affectedProductNames:
+                links.map((l) => l['product_name'] as String).toList(),
+          );
+        }
+        // Explicit override: remove the links EXPLICITLY (never rely on
+        // silent CASCADE) and audit every affected product in the note.
+        await txn.delete('product_ingredients',
+            where: 'ingredient_id = ?', whereArgs: [id]);
+      }
+
+      // Delete the inventory row itself
+      await txn.delete('inventory', where: 'id = ?', whereArgs: [id]);
+
+      // Audit trail: the deletion itself is always provable
+      final note = {
+        'audit_type': 'ingredient_deleted',
+        'ingredient_id': id,
+        'quantity_at_delete': beforeQty,
+        'cost_price_at_delete': costPrice,
+        'affected_product_ids': links
+            .map((l) => (l['product_id'] as num).toInt())
+            .toList(),
+        'override': force,
+        'links_explicitly_removed': links.isNotEmpty && force,
+      };
+      await txn.insert('inventory_audit_log', {
+        'action_date': DateTime.now().toIso8601String(),
+        'action_type': 'ingredient_deleted',
+        'ingredient_id': id,
+        'ingredient_name': name,
+        'quantity_before': beforeQty,
+        'quantity_change': -beforeQty,
+        'quantity_after': 0,
+        'cost_price_at_action': costPrice,
+        'reference_type': 'manual',
+        'reference_id': null,
+        'note': jsonEncode(note),
+      });
+      return 1;
+        });
   }
 
   /// Update ingredient quantity and atomically log the movement in the audit trail.
@@ -826,6 +964,206 @@ class DatabaseHelper {
       where: 'product_id = ? AND ingredient_id = ?',
       whereArgs: [productId, ingredientId],
     );
+  }
+
+  /// Phase 4.1: recipe-link removal with audit. Deletes the link inside a
+  /// transaction and logs the previous quantity so the change is provable
+  /// (L-4: traceability for recipe edits).
+  static Future<int> deleteProductIngredientSafe(
+    int productId, int ingredientId, {int? userId, String? userName},
+  ) async {
+    final db = await database;
+    return await db.transaction((txn) async {
+      final link = await txn.query(
+        'product_ingredients',
+        where: 'product_id = ? AND ingredient_id = ?',
+        whereArgs: [productId, ingredientId],
+      );
+      if (link.isEmpty) return 0;
+      final previousQty = (link.first['quantity'] as num).toDouble();
+      final invRows = await txn.query(
+        'inventory',
+        columns: ['name'],
+        where: 'id = ?',
+        whereArgs: [ingredientId],
+      );
+      final name = invRows.isNotEmpty ? invRows.first['name'] as String? : null;
+      final result = await txn.delete(
+        'product_ingredients',
+        where: 'product_id = ? AND ingredient_id = ?',
+        whereArgs: [productId, ingredientId],
+      );
+      final note = {
+        'audit_type': 'recipe_link_deleted',
+        'product_id': productId,
+        'ingredient_id': ingredientId,
+        'previous_quantity': previousQty,
+        'user_id': userId,
+        'user_name': userName,
+      };
+      await txn.insert('inventory_audit_log', {
+        'action_date': DateTime.now().toIso8601String(),
+        'action_type': 'recipe_link_deleted',
+        'ingredient_id': ingredientId,
+        'ingredient_name': name,
+        'quantity_before': previousQty,
+        'quantity_change': -previousQty,
+        'quantity_after': 0,
+        'cost_price_at_action': 0,
+        'reference_type': 'recipe',
+        'reference_id': productId,
+        'note': jsonEncode(note),
+      });
+      return result;
+    });
+  }
+
+  /// Phase 4.1: product deletion with pre-delete audit (L-3). The recipe links
+  /// are READ first and recorded in the audit note; only then is the product
+  /// row removed (SQLite CASCADE then cleans the links, but their exact ids
+  /// are already provably documented).
+  static Future<int> deleteProductSafe(int productId, {int? userId, String? userName}) async {
+    final db = await database;
+    return await db.transaction((txn) async {
+      final product = await txn.query(
+        'products',
+        columns: ['id', 'name'],
+        where: 'id = ?',
+        whereArgs: [productId],
+      );
+      if (product.isEmpty) return 0;
+      final name = product.first['name'] as String?;
+      final links = await txn.rawQuery(
+        'SELECT ingredient_id, quantity FROM product_ingredients WHERE product_id = ?',
+        [productId],
+      );
+      final note = {
+        'audit_type': 'product_deleted',
+        'product_id': productId,
+        'product_name': name,
+        'affected_ingredient_ids':
+            links.map((l) => (l['ingredient_id'] as num).toInt()).toList(),
+        'link_count': links.length,
+        'user_id': userId,
+        'user_name': userName,
+      };
+      await txn.insert('inventory_audit_log', {
+        'action_date': DateTime.now().toIso8601String(),
+        'action_type': 'product_deleted',
+        'ingredient_id': null,
+        'ingredient_name': name,
+        'quantity_before': 0,
+        'quantity_change': 0,
+        'quantity_after': 0,
+        'cost_price_at_action': 0,
+        'reference_type': 'recipe',
+        'reference_id': productId,
+        'note': jsonEncode(note),
+      });
+      return await txn.delete('products', where: 'id = ?', whereArgs: [productId]);
+    });
+  }
+
+  /// Phase 4.1: supplier deletion with financial-history protection (L-2).
+  /// A supplier with payment records is PERMANENTLY BLOCKED: supplier_payments
+  /// is financial history and must never be silently CASCADE-erased. Purchase
+  /// invoices are already protected by RESTRICT; surfaced here with the same
+  /// clear message before SQLite even rejects it.
+  static Future<int> deleteSupplierSafe(int supplierId) async {
+    final db = await database;
+    return await db.transaction((txn) async {
+      final supplier = await txn.query(
+        'suppliers',
+        columns: ['id', 'name'],
+        where: 'id = ?',
+        whereArgs: [supplierId],
+      );
+      if (supplier.isEmpty) return 0;
+      final name = supplier.first['name'] as String?;
+
+      final payments = await txn.rawQuery(
+        'SELECT COUNT(*) AS c FROM supplier_payments WHERE supplier_id = ?',
+        [supplierId],
+      );
+      final paymentCount = (payments.first['c'] as num).toInt();
+      if (paymentCount > 0) {
+        throw SafeDeleteBlockedException(
+          'لا يمكن حذف المورد "${name ?? 'المورد'}": لديه $paymentCount سجل مدفوعات مالي — لا يمكن حذف السجل المالي',
+        );
+      }
+
+      final purchaseInvoices = await txn.rawQuery(
+        'SELECT COUNT(*) AS c FROM purchase_invoices WHERE supplier_id = ?',
+        [supplierId],
+      );
+      final invoiceCount = (purchaseInvoices.first['c'] as num).toInt();
+      if (invoiceCount > 0) {
+        throw SafeDeleteBlockedException(
+          'لا يمكن حذف المورد "${name ?? 'المورد'}": مرتبط بـ $invoiceCount فاتورة شراء',
+        );
+      }
+
+      final note = {
+        'audit_type': 'supplier_deleted',
+        'supplier_id': supplierId,
+        'supplier_name': name,
+        'payment_records_at_delete': paymentCount,
+        'purchase_invoices_at_delete': invoiceCount,
+      };
+      await txn.insert('inventory_audit_log', {
+        'action_date': DateTime.now().toIso8601String(),
+        'action_type': 'supplier_deleted',
+        'ingredient_id': null,
+        'ingredient_name': name,
+        'quantity_before': 0,
+        'quantity_change': 0,
+        'quantity_after': 0,
+        'cost_price_at_action': 0,
+        'reference_type': 'supplier',
+        'reference_id': supplierId,
+        'note': jsonEncode(note),
+      });
+      return await txn.delete('suppliers', where: 'id = ?', whereArgs: [supplierId]);
+    });
+  }
+
+  /// Phase 4.1: expense deletion with audit (L-4). Reads the expense row first
+  /// so the deleted amount/name remain provable in the audit trail.
+  static Future<int> deleteExpenseSafe(int expenseId) async {
+    final db = await database;
+    return await db.transaction((txn) async {
+      final expense = await txn.query(
+        'expenses',
+        columns: ['id', 'name', 'amount', 'date'],
+        where: 'id = ?',
+        whereArgs: [expenseId],
+      );
+      if (expense.isEmpty) return 0;
+      final name = expense.first['name'] as String?;
+      final amount = (expense.first['amount'] as num).toDouble();
+      final date = expense.first['date']?.toString();
+      final note = {
+        'audit_type': 'expense_deleted',
+        'expense_id': expenseId,
+        'expense_name': name,
+        'deleted_amount': amount,
+        'deleted_date': date,
+      };
+      await txn.insert('inventory_audit_log', {
+        'action_date': DateTime.now().toIso8601String(),
+        'action_type': 'expense_deleted',
+        'ingredient_id': null,
+        'ingredient_name': name,
+        'quantity_before': amount,
+        'quantity_change': -amount,
+        'quantity_after': 0,
+        'cost_price_at_action': 0,
+        'reference_type': 'expense',
+        'reference_id': expenseId,
+        'note': jsonEncode(note),
+      });
+      return await txn.delete('expenses', where: 'id = ?', whereArgs: [expenseId]);
+    });
   }
 
   static Future<int> deleteAllProductIngredients(int productId) async {
