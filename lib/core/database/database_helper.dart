@@ -970,7 +970,7 @@ class DatabaseHelper {
   /// transaction and logs the previous quantity so the change is provable
   /// (L-4: traceability for recipe edits).
   static Future<int> deleteProductIngredientSafe(
-    int productId, int ingredientId, {int? userId, String? userName},
+    int productId, int ingredientId, {int? userId, String? userName}
   ) async {
     final db = await database;
     return await db.transaction((txn) async {
