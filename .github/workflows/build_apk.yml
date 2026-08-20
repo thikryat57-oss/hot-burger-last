@@ -49,7 +49,7 @@ jobs:
         run: |
           TMPKS=$(mktemp -d)
           printf '%s\n' "$KEYSTORE_BASE64" | base64 -d > "$TMPKS/release.keystore"
-          printf 'RELEASE_STORE_FILE=%s/release.keystore\nRELEASE_STORE_PASSWORD=%s\nRELEASE_KEY_ALIAS=hotburger-release\nRELEASE_KEY_PASSWORD=%s\n' "$TMPKS" "$STORE_PASSWORD" "$STORE_PASSWORD" > "android/key.properties"
+          printf 'RELEASE_STORE_FILE=%s/release.keystore\nRELEASE_STORE_PASSWORD=%s\nRELEASE_KEY_ALIAS=hotburger-release\nRELEASE_KEY_PASSWORD=%s\n' "$TMPKS" "$STORE_PASSWORD" "$KEY_PASSWORD" > "android/key.properties"
           chmod 600 "$TMPKS/release.keystore" "android/key.properties"
           keytool -list -keystore "$TMPKS/release.keystore" -storepass "$STORE_PASSWORD" > /dev/null 2>&1
           if [ $? -ne 0 ]; then echo "RELEASE KEYSTORE VERIFICATION FAILED"; exit 1; fi
@@ -60,7 +60,7 @@ jobs:
       - name: Verify release APK signing identity (hard block)
         run: |
           set -e
-          EXPECTED_FP="E37A190D0AF4C30B76C4A2B021C46FD91B379823EBCDFA12AD54E72C62E6F341"
+          EXPECTED_FP="78FC2DD78343E4790493DFFD94073D91DC0DA1C35D2F78EDF1893F53C3DEA5B7"
           BAD=0
           for apk in build/app/outputs/flutter-apk/app-*-release.apk; do
             APKCERT=$(apksigner verify --print-certs "$apk" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
