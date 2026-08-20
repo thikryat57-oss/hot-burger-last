@@ -10,6 +10,18 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    // Optional release signing material. Loads key.properties when present (CI or local).
+    // Without it, release builds hard-fail below instead of falling back to debug keys.
+    def releaseSigningProps = rootProject.file('key.properties')
+    if (releaseSigningProps.exists()) {
+        def props = new Properties()
+        props.load(new FileInputStream(releaseSigningProps))
+        project.ext.set('RELEASE_STORE_FILE', props.getProperty('RELEASE_STORE_FILE'))
+        project.ext.set('RELEASE_STORE_PASSWORD', props.getProperty('RELEASE_STORE_PASSWORD'))
+        project.ext.set('RELEASE_KEY_ALIAS', props.getProperty('RELEASE_KEY_ALIAS'))
+        project.ext.set('RELEASE_KEY_PASSWORD', props.getProperty('RELEASE_KEY_PASSWORD'))
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8
         targetCompatibility = JavaVersion.VERSION_1_8
@@ -30,11 +42,25 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        release {
+            if (project.hasProperty('RELEASE_STORE_FILE')) {
+                storeFile file(project.property('RELEASE_STORE_FILE'))
+                storePassword project.property('RELEASE_STORE_PASSWORD')
+                keyAlias project.property('RELEASE_KEY_ALIAS')
+                keyPassword project.property('RELEASE_KEY_PASSWORD')
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.debug
+            if (project.hasProperty('RELEASE_STORE_FILE')) {
+                signingConfig = signingConfigs.release
+            } else {
+                // No production signing material provided — hard fail instead of debug signing.
+                throw new GradleException("RELEASE_STORE_FILE property missing: release builds require production signing material (set via key.properties or CI).")
+            }
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'

@@ -41,8 +41,37 @@ jobs:
           HBP511_FIX_APPLIED: '1'
         run: flutter test
 
+      - name: Prepare release signing material (temporary, secrets only)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          TMPKS=$(mktemp -d)
+          printf '%s\n' "$KEYSTORE_BASE64" | base64 -d > "$TMPKS/release.keystore"
+          printf 'RELEASE_STORE_FILE=%s/release.keystore\nRELEASE_STORE_PASSWORD=%s\nRELEASE_KEY_ALIAS=hotburger-release\nRELEASE_KEY_PASSWORD=%s\n' "$TMPKS" "$STORE_PASSWORD" "$STORE_PASSWORD" > "android/key.properties"
+          chmod 600 "$TMPKS/release.keystore" "android/key.properties"
+          keytool -list -keystore "$TMPKS/release.keystore" -storepass "$STORE_PASSWORD" > /dev/null 2>&1
+          if [ $? -ne 0 ]; then echo "RELEASE KEYSTORE VERIFICATION FAILED"; exit 1; fi
+
       - name: Build release APKs
         run: flutter build apk --release --split-per-abi
+
+      - name: Verify release APK signing identity (hard block)
+        run: |
+          set -e
+          EXPECTED_FP="E37A190D0AF4C30B76C4A2B021C46FD91B379823EBCDFA12AD54E72C62E6F341"
+          BAD=0
+          for apk in build/app/outputs/flutter-apk/app-*-release.apk; do
+            APKCERT=$(apksigner verify --print-certs "$apk" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
+            CN=$(echo "$APKCERT" | grep -i "Signer #1 certificate DN" | sed 's/.*CN=//' | cut -d',' -f1)
+            FP=$(echo "$APKCERT" | grep -i "Signer #1 certificate SHA-256 digest" | awk -F'digest: ' '{print $2}' | tr 'a-f' 'A-F' | head -1)
+            echo "$apk | CN=$CN | SHA-256=$FP"
+            case "$CN" in "Android Debug") BAD=1 ;; esac
+            if [ "$FP" != "$EXPECTED_FP" ]; then BAD=1; fi
+          done
+          if [ "$BAD" -ne 0 ]; then echo "RELEASE SIGNING VERIFICATION FAILED: APK is not production-signed"; exit 1; fi
+          echo "RELEASE SIGNING VERIFIED: production certificate on all ABIs"
 
       - name: Package release APKs
         run: zip -j hot-burger-release.zip build/app/outputs/flutter-apk/app-*-release.apk
@@ -53,6 +82,10 @@ jobs:
           name: release-apk
           path: hot-burger-release.zip
 
+      - name: Clean up temporary signing material
+        if: always()
+        run: |
+          rm -f android/key.properties
       - name: Upload raw release APKs
         uses: actions/upload-artifact@v4
         with:
