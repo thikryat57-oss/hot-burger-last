@@ -60,14 +60,15 @@ jobs:
       - name: Verify release APK signing identity (hard block)
         run: |
           set -e
-          EXPECTED_FP="78FC2DD78343E4790493DFFD94073D91DC0DA1C35D2F78EDF1893F53C3DEA5B7"
+          EXPECTED_FP="78:FC:2D:D7:83:43:E4:79:04:93:DF:FD:94:07:3D:91:DC:0D:A1:C3:5D:2F:78:ED:F1:89:3F:53:C3:DE:A5:B7"
           BAD=0
           for apk in build/app/outputs/flutter-apk/app-*-release.apk; do
-            APKCERT=$(apksigner verify --print-certs "$apk" 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g')
-            CN=$(echo "$APKCERT" | grep -i "Signer #1 certificate DN" | sed 's/.*CN=//' | cut -d',' -f1)
-            FP=$(echo "$APKCERT" | grep -i "Signer #1 certificate SHA-256 digest" | awk -F'digest: ' '{print $2}' | tr 'a-f' 'A-F' | head -1)
+            APKCERT=$(keytool -printcert -jarfile "$apk" 2>&1)
+            CN=$(echo "$APKCERT" | grep "^Owner:" | sed 's/.*CN=//' | cut -d',' -f1)
+            FP=$(echo "$APKCERT" | grep "SHA256:" | head -1 | awk '{print $2}')
             echo "$apk | CN=$CN | SHA-256=$FP"
             case "$CN" in "Android Debug") BAD=1 ;; esac
+            if [ -z "$CN" ] || [ -z "$FP" ]; then BAD=1; echo "$apk: could not extract signing certificate"; continue; fi
             if [ "$FP" != "$EXPECTED_FP" ]; then BAD=1; fi
           done
           if [ "$BAD" -ne 0 ]; then echo "RELEASE SIGNING VERIFICATION FAILED: APK is not production-signed"; exit 1; fi
