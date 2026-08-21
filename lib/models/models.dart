@@ -189,7 +189,6 @@ class RawMaterial {
   }
 }
 
-
 class Customer {
   final int? id;
   final String name;
@@ -263,6 +262,38 @@ class Invoice {
     this.items,
   });
 
+  Invoice copyWith({
+    int? id,
+    String? invoiceNumber,
+    double? totalAmount,
+    double? subtotalAmount,
+    double? discountAmount,
+    double? paidAmount,
+    double? changeAmount,
+    String? status,
+    String? paymentMethod,
+    int? customerId,
+    String? notes,
+    String? createdAt,
+    List<InvoiceItem>? items,
+  }) {
+    return Invoice(
+      id: id ?? this.id,
+      invoiceNumber: invoiceNumber ?? this.invoiceNumber,
+      totalAmount: totalAmount ?? this.totalAmount,
+      subtotalAmount: subtotalAmount ?? this.subtotalAmount,
+      discountAmount: discountAmount ?? this.discountAmount,
+      paidAmount: paidAmount ?? this.paidAmount,
+      changeAmount: changeAmount ?? this.changeAmount,
+      status: status ?? this.status,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      customerId: customerId ?? this.customerId,
+      notes: notes ?? this.notes,
+      createdAt: createdAt ?? this.createdAt,
+      items: items ?? this.items,
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -306,9 +337,8 @@ class InvoiceItem {
   final int quantity;
   final double price;
   final double total;
+  final double cost;
   final double costSnapshot;
-  final double unitProfit;
-  final double totalProfit;
 
   InvoiceItem({
     this.id,
@@ -318,10 +348,12 @@ class InvoiceItem {
     required this.quantity,
     required this.price,
     required this.total,
+    required this.cost,
     this.costSnapshot = 0,
-    this.unitProfit = 0,
-    this.totalProfit = 0,
   });
+
+  double get unitProfit => price - costSnapshot;
+  double get totalProfit => total - (costSnapshot * quantity);
 
   Map<String, dynamic> toMap() {
     return {
@@ -332,9 +364,8 @@ class InvoiceItem {
       'quantity': quantity,
       'price': price,
       'total': total,
+      'cost': cost,
       'cost_snapshot': costSnapshot,
-      'unit_profit': unitProfit,
-      'total_profit': totalProfit,
     };
   }
 
@@ -344,12 +375,11 @@ class InvoiceItem {
       invoiceId: map['invoice_id'],
       productId: map['product_id'],
       productName: map['product_name'],
-      quantity: map['quantity'],
+      quantity: (map['quantity'] as num).toInt(),
       price: map['price']?.toDouble() ?? 0,
       total: map['total']?.toDouble() ?? 0,
-      costSnapshot: map['cost_snapshot']?.toDouble() ?? 0,
-      unitProfit: map['unit_profit']?.toDouble() ?? 0,
-      totalProfit: map['total_profit']?.toDouble() ?? 0,
+      cost: map['cost']?.toDouble() ?? 0,
+      costSnapshot: map['cost_snapshot']?.toDouble() ?? map['cost']?.toDouble() ?? 0,
     );
   }
 }
@@ -394,17 +424,18 @@ class Expense {
   }
 }
 
-// Cart item for sales
 class CartItem {
   final int productId;
   final String productName;
   final double price;
+  final double cost;
   int quantity;
 
   CartItem({
     required this.productId,
     required this.productName,
     required this.price,
+    this.cost = 0,
     this.quantity = 1,
   });
 
@@ -415,12 +446,13 @@ class CartItem {
       'product_id': productId,
       'product_name': productName,
       'price': price,
+      'cost': cost,
       'quantity': quantity,
       'total': total,
     };
   }
 }
-// Inventory / Ingredient model for raw materials
+
 class IngredientModel {
   final int? id;
   final String name;
@@ -471,12 +503,11 @@ class IngredientModel {
   bool get isLowStock => quantity <= minQuantity;
 }
 
-// Product-Ingredient relation model (recipe link)
 class ProductIngredient {
   final int? id;
   final int productId;
   final int ingredientId;
-  final double quantity; // الكمية المستهلكة من المادة الخام لكل منتج
+  final double quantity;
 
   ProductIngredient({
     this.id,
@@ -511,6 +542,8 @@ class Supplier {
   final String? address;
   final String? notes;
   final double balance;
+  final bool isActive;
+  final String? taxNumber;
   final String? createdAt;
   final String? updatedAt;
 
@@ -521,6 +554,8 @@ class Supplier {
     this.address,
     this.notes,
     this.balance = 0,
+    this.isActive = true,
+    this.taxNumber,
     this.createdAt,
     this.updatedAt,
   });
@@ -533,6 +568,8 @@ class Supplier {
       'address': address,
       'notes': notes,
       'balance': balance,
+      'is_active': isActive ? 1 : 0,
+      'tax_number': taxNumber,
       'created_at': createdAt,
       'updated_at': updatedAt,
     };
@@ -546,6 +583,8 @@ class Supplier {
       address: map['address'],
       notes: map['notes'],
       balance: map['balance']?.toDouble() ?? 0,
+      isActive: map['is_active'] == null ? true : map['is_active'] == 1,
+      taxNumber: map['tax_number'],
       createdAt: map['created_at'],
       updatedAt: map['updated_at'],
     );
@@ -559,7 +598,7 @@ class PurchaseInvoice {
   final String invoiceNumber;
   final double totalAmount;
   final double paidAmount;
-  final String status; // paid, partial, unpaid
+  final String status;
   final String? notes;
   final String date;
   final String? createdAt;
@@ -612,30 +651,36 @@ class PurchaseInvoice {
 class PurchaseItem {
   final int? id;
   final int? purchaseInvoiceId;
-  final int ingredientId;
-  final String? ingredientName;
+  final int? materialId;
+  final int? ingredientId;
+  final String? materialName;
   final double quantity;
   final double unitCost;
   final double totalCost;
+  final String? unit;
 
   PurchaseItem({
     this.id,
     this.purchaseInvoiceId,
-    required this.ingredientId,
-    this.ingredientName,
+    this.materialId,
+    this.ingredientId,
+    this.materialName,
     required this.quantity,
     required this.unitCost,
     required this.totalCost,
+    this.unit,
   });
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'purchase_invoice_id': purchaseInvoiceId,
-      'ingredient_id': ingredientId,
+      'material_id': materialId,
+      'ingredient_id': ingredientId ?? materialId,
       'quantity': quantity,
       'unit_cost': unitCost,
       'total_cost': totalCost,
+      'unit': unit,
     };
   }
 
@@ -643,11 +688,13 @@ class PurchaseItem {
     return PurchaseItem(
       id: map['id'],
       purchaseInvoiceId: map['purchase_invoice_id'],
+      materialId: map['material_id'],
       ingredientId: map['ingredient_id'],
-      ingredientName: map['ingredient_name'],
+      materialName: map['material_name'] ?? map['ingredient_name'],
       quantity: map['quantity']?.toDouble() ?? 0,
       unitCost: map['unit_cost']?.toDouble() ?? 0,
       totalCost: map['total_cost']?.toDouble() ?? 0,
+      unit: map['unit'],
     );
   }
 }
@@ -696,17 +743,13 @@ class SupplierPayment {
   }
 }
 
-
 class Shift {
   final int? id;
   final int userId;
   final String userName;
   final String openedAt;
   final String? closedAt;
-  final double openingCash;
-  final double? expectedCash;
-  final double? actualCash;
-  final double? difference;
+
   final String status;
   final String? notes;
 
@@ -716,25 +759,362 @@ class Shift {
     required this.userName,
     required this.openedAt,
     this.closedAt,
-    this.openingCash = 0,
-    this.expectedCash,
-    this.actualCash,
-    this.difference,
+    this.openingBalance = 0,
+    this.closingBalance,
     this.status = 'open',
     this.notes,
   });
 
+  final double openingBalance;
+  final double? closingBalance;
+
   factory Shift.fromMap(Map<String, dynamic> map) => Shift(
     id: map['id'],
     userId: map['user_id'],
-    userName: map['user_name'],
+    userName: map['user_name'] ?? '',
     openedAt: map['opened_at'],
     closedAt: map['closed_at'],
-    openingCash: (map['opening_cash'] as num?)?.toDouble() ?? 0,
-    expectedCash: (map['expected_cash'] as num?)?.toDouble(),
-    actualCash: (map['actual_cash'] as num?)?.toDouble(),
-    difference: (map['difference'] as num?)?.toDouble(),
+    openingBalance: (map['opening_balance'] as num?)?.toDouble() ?? 0,
+    closingBalance: (map['closing_balance'] as num?)?.toDouble(),
     status: map['status'] ?? 'open',
     notes: map['notes'],
   );
+}
+
+class MaterialModel {
+  final int? id;
+  final String name;
+  final String type;
+  final String unit;
+  final double quantity;
+  final double minQuantity;
+  final double costPrice;
+  final bool isActive;
+  final String? createdAt;
+  final String? updatedAt;
+  final String? category;
+
+  MaterialModel({
+    this.id,
+    required this.name,
+    required this.type,
+    required this.unit,
+    this.quantity = 0,
+    this.minQuantity = 0,
+    this.costPrice = 0,
+    this.isActive = true,
+    this.createdAt,
+    this.updatedAt,
+    this.category,
+  });
+
+  MaterialModel copyWith({
+    int? id,
+    String? name,
+    String? type,
+    String? unit,
+    double? quantity,
+    double? minQuantity,
+    double? costPrice,
+    bool? isActive,
+    String? createdAt,
+    String? updatedAt,
+    String? category,
+  }) {
+    return MaterialModel(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      type: type ?? this.type,
+      unit: unit ?? this.unit,
+      quantity: quantity ?? this.quantity,
+      minQuantity: minQuantity ?? this.minQuantity,
+      costPrice: costPrice ?? this.costPrice,
+      isActive: isActive ?? this.isActive,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      category: category ?? this.category,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'type': type,
+      'unit': unit,
+      'quantity': quantity,
+      'min_quantity': minQuantity,
+      'cost_price': costPrice,
+      'is_active': isActive ? 1 : 0,
+      'created_at': createdAt,
+      'updated_at': updatedAt,
+      'category': category,
+    };
+  }
+
+  factory MaterialModel.fromMap(Map<String, dynamic> map) {
+    return MaterialModel(
+      id: map['id'],
+      name: map['name'],
+      type: map['type'],
+      unit: map['unit'],
+      quantity: map['quantity']?.toDouble() ?? 0,
+      minQuantity: map['min_quantity']?.toDouble() ?? 0,
+      costPrice: map['cost_price']?.toDouble() ?? 0,
+      isActive: map['is_active'] == 1,
+      createdAt: map['created_at'],
+      updatedAt: map['updated_at'],
+      category: map['category'],
+    );
+  }
+
+  bool get isPrepared => type == 'prepared';
+}
+
+class RecipeModel {
+  final int? id;
+  final String parentType;
+  final int parentId;
+  final int materialId;
+  final double quantity;
+  final String unit;
+  final String? createdAt;
+  final String? materialName;
+  final double? materialCost;
+
+  RecipeModel({
+    this.id,
+    required this.parentType,
+    required this.parentId,
+    required this.materialId,
+    required this.quantity,
+    required this.unit,
+    this.createdAt,
+    this.materialName,
+    this.materialCost,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'parent_type': parentType,
+      'parent_id': parentId,
+      'material_id': materialId,
+      'quantity': quantity,
+      'unit': unit,
+      'created_at': createdAt,
+    };
+  }
+
+  factory RecipeModel.fromMap(Map<String, dynamic> map) {
+    return RecipeModel(
+      id: map['id'],
+      parentType: map['parent_type'],
+      parentId: map['parent_id'],
+      materialId: map['material_id'],
+      quantity: map['quantity']?.toDouble() ?? 0,
+      unit: map['unit'],
+      createdAt: map['created_at'],
+      materialName: map['material_name'],
+      materialCost: map['material_cost']?.toDouble(),
+    );
+  }
+}
+
+class ProductionBatch {
+  final int? id;
+  final int materialId;
+  final double quantity;
+  final double costPerUnit;
+  final double totalCost;
+  final String? productionDate;
+  final String? notes;
+  final int? userId;
+
+  ProductionBatch({
+    this.id,
+    required this.materialId,
+    required this.quantity,
+    required this.costPerUnit,
+    required this.totalCost,
+    this.productionDate,
+    this.notes,
+    this.userId,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'material_id': materialId,
+      'quantity': quantity,
+      'cost_per_unit': costPerUnit,
+      'total_cost': totalCost,
+      'production_date': productionDate,
+      'notes': notes,
+      'user_id': userId,
+    };
+  }
+
+  factory ProductionBatch.fromMap(Map<String, dynamic> map) {
+    return ProductionBatch(
+      id: map['id'],
+      materialId: map['material_id'],
+      quantity: map['quantity']?.toDouble() ?? 0,
+      costPerUnit: map['cost_per_unit']?.toDouble() ?? 0,
+      totalCost: map['total_cost']?.toDouble() ?? 0,
+      productionDate: map['production_date'],
+      notes: map['notes'],
+      userId: map['user_id'],
+    );
+  }
+}
+
+class StocktakeSession {
+  final int? id;
+  final String startDate;
+  final String? endDate;
+  final String status;
+  final String? notes;
+  final int? userId;
+  final String? userName;
+
+  StocktakeSession({
+    this.id,
+    required this.startDate,
+    this.endDate,
+    required this.status,
+    this.notes,
+    this.userId,
+    this.userName,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'start_date': startDate,
+      'end_date': endDate,
+      'status': status,
+      'notes': notes,
+      'user_id': userId,
+      'user_name': userName,
+    };
+  }
+
+  factory StocktakeSession.fromMap(Map<String, dynamic> map) {
+    return StocktakeSession(
+      id: map['id'],
+      startDate: map['start_date'],
+      endDate: map['end_date'],
+      status: map['status'],
+      notes: map['notes'],
+      userId: map['user_id'],
+      userName: map['user_name'],
+    );
+  }
+}
+
+class StocktakeItem {
+  final int? id;
+  final int sessionId;
+  final int materialId;
+  final String materialName;
+  final double theoreticalQty;
+  final double countedQty;
+  final double variance;
+  final double unitCostAtCount;
+  final String? notes;
+
+  StocktakeItem({
+    this.id,
+    required this.sessionId,
+    required this.materialId,
+    required this.materialName,
+    required this.theoreticalQty,
+    required this.countedQty,
+    required this.variance,
+    required this.unitCostAtCount,
+    this.notes,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'session_id': sessionId,
+      'material_id': materialId,
+      'theoretical_qty': theoreticalQty,
+      'counted_qty': countedQty,
+      'variance': variance,
+      'unit_cost_at_count': unitCostAtCount,
+      'notes': notes,
+    };
+  }
+
+  factory StocktakeItem.fromMap(Map<String, dynamic> map) {
+    return StocktakeItem(
+      id: map['id'],
+      sessionId: map['session_id'],
+      materialId: map['material_id'],
+      materialName: map['material_name'] ?? '',
+      theoreticalQty: (map['theoretical_qty'] as num).toDouble(),
+      countedQty: (map['counted_qty'] as num).toDouble(),
+      variance: (map['variance'] as num).toDouble(),
+      unitCostAtCount: (map['unit_cost_at_count'] as num).toDouble(),
+      notes: map['notes'],
+    );
+  }
+}
+
+class InventoryAdjustment {
+  final int? id;
+  final int materialId;
+  final String materialName;
+  final double quantityChange;
+  final String actionType;
+  final double costPriceAtAction;
+  final String date;
+  final String? notes;
+  final int? userId;
+  final String? userName;
+
+  InventoryAdjustment({
+    this.id,
+    required this.materialId,
+    required this.materialName,
+    required this.quantityChange,
+    required this.actionType,
+    required this.costPriceAtAction,
+    required this.date,
+    this.notes,
+    this.userId,
+    this.userName,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'material_id': materialId,
+      'quantity_change': quantityChange,
+      'action_type': actionType,
+      'cost_price_at_action': costPriceAtAction,
+      'date': date,
+      'notes': notes,
+      'user_id': userId,
+      'user_name': userName,
+    };
+  }
+
+  factory InventoryAdjustment.fromMap(Map<String, dynamic> map) {
+    return InventoryAdjustment(
+      id: map['id'],
+      materialId: map['material_id'],
+      materialName: map['material_name'] ?? '',
+      quantityChange: (map['quantity_change'] as num).toDouble(),
+      actionType: map['action_type'],
+      costPriceAtAction: (map['cost_price_at_action'] as num).toDouble(),
+      date: map['date'],
+      notes: map['notes'],
+      userId: map['user_id'],
+      userName: map['user_name'],
+    );
+  }
 }

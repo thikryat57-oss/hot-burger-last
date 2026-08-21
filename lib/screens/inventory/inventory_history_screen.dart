@@ -29,6 +29,13 @@ class _InventoryHistoryScreenState extends State<InventoryHistoryScreen> {
     'purchase': 'شراء',
     'sale': 'بيع',
     'sale_deleted': 'استرجاع (حذف فاتورة)',
+    'production_in': 'إنتاج (+)',
+    'production_out': 'استهلاك إنتاج (-)',
+    'stocktake_adjustment': 'تسوية جرد',
+    'waste': 'فاقد / هالك',
+    'damage': 'تلف',
+    'theft': 'سرقة',
+    'correction': 'تصحيح',
   };
 
   @override

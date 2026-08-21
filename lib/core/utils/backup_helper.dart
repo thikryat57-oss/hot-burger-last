@@ -45,7 +45,7 @@ class BackupHelper {
     'users',
     'categories',
     'products',
-    'raw_materials',
+    'materials',
     'invoices',
     'invoice_items',
   ];
@@ -275,12 +275,9 @@ class BackupHelper {
       }
 
       for (final table in kIdentityTables) {
-        final tables = await validationDb.rawQuery(
-          "SELECT name FROM sqlite_master WHERE type='table' AND name='$table'",
-        );
+        final tables = await validationDb.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'");
         if (tables.isEmpty) {
-          return BackupValidationResult.rejected(
-              filePath, 'هيكل قاعدة البيانات غير متطابق: جدول $table مفقود');
+          return BackupValidationResult.rejected(filePath, 'هيكل قاعدة البيانات غير متطابق: جدول $table مفقود');
         }
       }
 
@@ -399,6 +396,10 @@ class BackupHelper {
       // readOnly=true, so the check is performed by hand (passing version: to
       // a readOnly handle makes sqflite attempt a write whenever the header
       // disagrees). A mismatched header is treated as a verification failure.
+      if (_testFailAfterSwap) {
+        throw StateError('TEST: post-swap failure injected');
+      }
+
       final verificationDb = await databaseFactory.openDatabase(
         dbPath,
         options: OpenDatabaseOptions(
@@ -408,27 +409,19 @@ class BackupHelper {
       );
       String? verificationFailure;
       try {
-        final uv =
-            await verificationDb.rawQuery('PRAGMA user_version');
+        final uv = await verificationDb.rawQuery('PRAGMA user_version');
         final uvValue = (uv.first['user_version'] ?? 0) as int;
         if (uvValue != Constants.dbVersion) {
-          verificationFailure =
-              'user_version المستعادة غير مطابق ($uvValue ≠ ${Constants.dbVersion})';
+          verificationFailure = 'user_version المستعادة غير مطابق ($uvValue ≠ ${Constants.dbVersion})';
         } else {
-          final integrity =
-              await verificationDb.rawQuery('PRAGMA integrity_check');
-          if (integrity.isEmpty ||
-              integrity.first['integrity_check'] != 'ok') {
-            verificationFailure =
-                'integrity_check فشل على قاعدة البيانات المستعادة';
+          final integrity = await verificationDb.rawQuery('PRAGMA integrity_check');
+          if (integrity.isEmpty || integrity.first['integrity_check'] != 'ok') {
+            verificationFailure = 'integrity_check فشل على قاعدة البيانات المستعادة';
           } else {
             for (final table in kIdentityTables) {
-              final tables = await verificationDb.rawQuery(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='$table'",
-              );
+              final tables = await verificationDb.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='$table'");
               if (tables.isEmpty) {
-                verificationFailure =
-                    'جدول $table مفقود في قاعدة البيانات المستعادة';
+                verificationFailure = 'جدول $table مفقود في قاعدة البيانات المستعادة';
                 break;
               }
             }

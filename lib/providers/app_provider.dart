@@ -1,305 +1,104 @@
 import 'dart:convert';
-import 'package:crypto/crypto.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' hide Category;
 import 'package:sqflite/sqflite.dart';
 import '../core/database/database_helper.dart';
-import '../core/utils/financial_calculator.dart';
+import '../core/utils/recipe_engine.dart';
 import '../models/models.dart';
 
-class AppProvider extends ChangeNotifier {
+class AppProvider with ChangeNotifier {
   Database? _db;
   User? _currentUser;
   bool _isLoggedIn = false;
-  int _currentIndex = 0;
+  Shift? _currentShift;
 
-  bool get isLoggedIn => _isLoggedIn;
   User? get currentUser => _currentUser;
-  int get currentIndex => _currentIndex;
+  bool get isLoggedIn => _isLoggedIn;
+  Shift? get currentShift => _currentShift;
+
+  bool get isManager => _currentUser?.role == 'manager';
+
+  AppProvider() {
+    initDatabase();
+  }
 
   Future<void> initDatabase() async {
     _db = await DatabaseHelper.database;
+    notifyListeners();
   }
 
-  // Authentication
-  Future<List<User>> getActiveUsers() async {
-    final results = await _db!.query('users', where: 'is_active = 1', orderBy: 'name ASC');
-    return results.map((e) => User.fromMap(e)).toList();
-  }
-
-  String _generateSalt() => sha256.convert(utf8.encode(
-        '${DateTime.now().microsecondsSinceEpoch}:${_currentUser?.id ?? 'user'}:HotBurger',
-      )).toString().substring(0, 32);
-
-  String _hashPassword(String password, String salt) {
-    var digest = sha256.convert(utf8.encode('$salt:$password'));
-    for (var i = 0; i < 10000; i++) {
-      digest = sha256.convert(utf8.encode('$salt:${digest.toString()}'));
-    }
-    return digest.toString();
-  }
-
+  // Auth
   Future<bool> login(String password, {int? userId}) async {
-    final where = userId == null ? 'is_active = 1' : 'id = ? AND is_active = 1';
-    final args = userId == null ? null : [userId];
-    final results = await _db!.query('users', where: where, whereArgs: args);
-    for (final row in results) {
-      final storedHash = row['password_hash']?.toString() ?? '';
-      final storedSalt = row['password_salt']?.toString() ?? '';
-      final legacy = row['password']?.toString() ?? '';
-      var valid = false;
-      var needsUpgrade = false;
-      if (storedHash.isNotEmpty && storedSalt.isNotEmpty) {
-        valid = storedHash == _hashPassword(password, storedSalt);
-      } else if (storedHash.isNotEmpty) {
-        // v9-v13 compatibility: verify the old unsalted hash once, then upgrade.
-        valid = storedHash == sha256.convert(utf8.encode(password)).toString();
-        needsUpgrade = valid;
-      } else {
-        valid = legacy == password;
-        needsUpgrade = valid;
-      }
-      if (valid) {
-        if (needsUpgrade || storedSalt.isEmpty) {
-          final salt = _generateSalt();
-          await _db!.update('users', {
-            'password_hash': _hashPassword(password, salt),
-            'password_salt': salt,
-            'password': '',
-          }, where: 'id = ?', whereArgs: [row['id']]);
-        }
-        final refreshed = await _db!.query('users', where: 'id = ?', whereArgs: [row['id']], limit: 1);
-        _currentUser = User.fromMap(refreshed.first);
-        _isLoggedIn = true;
-        notifyListeners();
-        return true;
-      }
+    _db ??= await DatabaseHelper.database;
+    final results = await _db!.query(
+      'users',
+      where: userId != null ? 'id = ? AND password = ?' : 'password = ?',
+      whereArgs: userId != null ? [userId, password] : [password],
+    );
+
+    if (results.isNotEmpty) {
+      _currentUser = User.fromMap(results.first);
+      _isLoggedIn = true;
+      notifyListeners();
+      return true;
     }
     return false;
-  }
-
-  bool get isManager => _currentUser?.role == 'manager';
-  bool get isCashier => _currentUser?.role == 'cashier';
-  bool canManageCatalog() => isManager;
-  bool canManageFinance() => isManager;
-  bool canManageUsers() => isManager;
-  bool canVoidInvoice() => isManager;
-
-  Future<int> addUser({required String name, required String password, required String role}) async {
-    if (!isManager) throw Exception('هذه العملية متاحة للمدير فقط');
-    if (!{'manager', 'cashier'}.contains(role)) throw Exception('دور المستخدم غير صالح');
-    if (name.trim().isEmpty || password.length < 4) throw Exception('الاسم ورمز الدخول غير صالحين');
-    final exists = await _db!.query('users', where: 'name = ?', whereArgs: [name.trim()], limit: 1);
-    if (exists.isNotEmpty) throw Exception('اسم المستخدم موجود بالفعل');
-    final salt = _generateSalt();
-    final id = await _db!.insert('users', {
-      'name': name.trim(),
-      'password': '',
-      'password_hash': _hashPassword(password, salt),
-      'password_salt': salt,
-      'role': role,
-      'is_active': 1,
-    });
-    notifyListeners();
-    return id;
-  }
-
-  Future<int> updateUserPassword(int id, String password) async {
-    if (!isManager) throw Exception('هذه العملية متاحة للمدير فقط');
-    if (password.length < 4) throw Exception('رمز الدخول يجب أن يكون 4 أرقام على الأقل');
-    final salt = _generateSalt();
-    final result = await _db!.update('users', {
-      'password_hash': _hashPassword(password, salt),
-      'password_salt': salt,
-      'password': '',
-    }, where: 'id = ?', whereArgs: [id]);
-    notifyListeners();
-    return result;
-  }
-
-  Future<int> setUserActive(int id, bool active) async {
-    if (!isManager) throw Exception('هذه العملية متاحة للمدير فقط');
-    if (id == _currentUser?.id && !active) throw Exception('لا يمكنك تعطيل المستخدم الحالي');
-    final result = await _db!.update('users', {'is_active': active ? 1 : 0}, where: 'id = ?', whereArgs: [id]);
-    notifyListeners();
-    return result;
-  }
-
-  // ==================== CASHIER SHIFTS ====================
-
-  Future<Shift?> getOpenShift() async {
-    final rows = await _db!.query('shifts', where: 'status = ?', whereArgs: ['open'], orderBy: 'opened_at DESC', limit: 1);
-    return rows.isEmpty ? null : Shift.fromMap(rows.first);
-  }
-
-  Future<Shift?> getCurrentUserOpenShift() async {
-    if (_currentUser?.id == null) return null;
-    final rows = await _db!.query(
-      'shifts',
-      where: 'status = ? AND user_id = ?',
-      whereArgs: ['open', _currentUser!.id],
-      orderBy: 'opened_at DESC',
-      limit: 1,
-    );
-    return rows.isEmpty ? null : Shift.fromMap(rows.first);
-  }
-
-  Future<int> openShift(double openingCash, {String? notes}) async {
-    if (_currentUser?.id == null) throw Exception('يجب تسجيل الدخول أولاً');
-    final existing = await getOpenShift();
-    if (existing != null) throw Exception('توجد وردية مفتوحة حاليًا بواسطة ${existing.userName}');
-    return _db!.insert('shifts', {
-      'user_id': _currentUser!.id,
-      'user_name': _currentUser!.name,
-      'opened_at': DateTime.now().toIso8601String(),
-      'opening_cash': openingCash,
-      'status': 'open',
-      'notes': notes,
-    });
-  }
-
-  Future<Map<String, dynamic>> getCurrentShiftCashSummary() async {
-    final shift = await getCurrentUserOpenShift();
-    if (shift == null) throw Exception('لا توجد وردية مفتوحة');
-    final result = await _db!.rawQuery(
-      "SELECT COALESCE(SUM(total_amount),0) AS sales FROM invoices WHERE status NOT IN ('cancelled','returned') AND payment_method = 'cash' AND created_at >= ?",
-      [shift.openedAt],
-    );
-    final sales = (result.first['sales'] as num?)?.toDouble() ?? 0;
-    final expenses = await _db!.rawQuery(
-      'SELECT COALESCE(SUM(amount),0) AS expenses FROM expenses WHERE created_at >= ?',
-      [shift.openedAt],
-    );
-    final expenseTotal = (expenses.first['expenses'] as num?)?.toDouble() ?? 0;
-    final expected = shift.openingCash + sales - expenseTotal;
-    return {'shift': shift, 'cashSales': sales, 'expenses': expenseTotal, 'expectedCash': expected};
-  }
-
-  Future<int> closeShift(double actualCash, {String? notes}) async {
-    final summary = await getCurrentShiftCashSummary();
-    final shift = summary['shift'] as Shift;
-    final expected = summary['expectedCash'] as double;
-    final now = DateTime.now().toIso8601String();
-    final difference = actualCash - expected;
-    final result = await _db!.update('shifts', {
-      'closed_at': now,
-      'expected_cash': expected,
-      'actual_cash': actualCash,
-      'difference': difference,
-      'status': 'closed',
-      'notes': notes,
-    }, where: 'id = ? AND status = ?', whereArgs: [shift.id, 'open']);
-    notifyListeners();
-    return result;
-  }
-
-  Future<List<Shift>> getShifts({int limit = 50}) async {
-    if (!isLoggedIn) throw Exception('يجب تسجيل الدخول أولاً');
-    final rows = await _db!.query(
-      'shifts',
-      where: isManager ? null : 'user_id = ?',
-      whereArgs: isManager ? null : [_currentUser!.id],
-      orderBy: 'opened_at DESC',
-      limit: limit,
-    );
-    return rows.map((e) => Shift.fromMap(e)).toList();
-  }
-
-
-  // ==================== KITCHEN DISPLAY SYSTEM ====================
-
-  /// Returns active kitchen tickets with their line items.
-  Future<List<Map<String, dynamic>>> getKitchenOrders() async {
-    final rows = await _db!.rawQuery('''
-      SELECT i.id, i.invoice_number, i.kitchen_status, i.created_at,
-             i.payment_method, i.total_amount, c.name AS customer_name,
-             COUNT(ii.id) AS item_count
-      FROM invoices i
-      LEFT JOIN invoice_items ii ON ii.invoice_id = i.id
-      LEFT JOIN customers c ON c.id = i.customer_id
-      WHERE i.status = 'completed' AND i.kitchen_status IN ('new','preparing','ready')
-      GROUP BY i.id
-      ORDER BY CASE i.kitchen_status
-        WHEN 'new' THEN 1
-        WHEN 'preparing' THEN 2
-        WHEN 'ready' THEN 3
-        ELSE 4 END,
-        i.created_at ASC
-    ''');
-
-    final result = <Map<String, dynamic>>[];
-    for (final row in rows) {
-      final items = await _db!.query(
-        'invoice_items',
-        where: 'invoice_id = ?',
-        whereArgs: [row['id']],
-        orderBy: 'id ASC',
-      );
-      result.add({...row, 'items': items});
-    }
-    return result;
-  }
-
-  Future<int> updateKitchenStatus(int invoiceId, String status) async {
-    if (!isLoggedIn) throw Exception('يجب تسجيل الدخول أولاً');
-    const allowed = {'new', 'preparing', 'ready', 'delivered'};
-    if (!allowed.contains(status)) throw Exception('حالة المطبخ غير صالحة');
-
-    final current = await _db!.query(
-      'invoices',
-      columns: ['id', 'status', 'kitchen_status'],
-      where: 'id = ?',
-      whereArgs: [invoiceId],
-      limit: 1,
-    );
-    if (current.isEmpty) throw Exception('الفاتورة غير موجودة');
-    if (current.first['status'] != 'completed') {
-      throw Exception('لا يمكن تغيير حالة فاتورة غير مكتملة');
-    }
-    final currentKitchen = current.first['kitchen_status']?.toString() ?? 'done';
-    const transitions = {
-      'new': {'preparing'},
-      'preparing': {'ready'},
-      'ready': {'delivered'},
-      'delivered': <String>{},
-    };
-    if (currentKitchen != status && !(transitions[currentKitchen]?.contains(status) ?? false)) {
-      throw Exception('لا يمكن الانتقال من "$currentKitchen" إلى "$status"');
-    }
-
-    final result = await _db!.transaction<int>((txn) async {
-      final updated = await txn.update(
-        'invoices',
-        {'kitchen_status': status},
-        where: 'id = ? AND status = ? AND kitchen_status = ?',
-        whereArgs: [invoiceId, 'completed', currentKitchen],
-      );
-      if (updated > 0) {
-        await txn.insert('invoice_audit_log', {
-          'invoice_id': invoiceId,
-          'action_type': 'kitchen_$status',
-          'action_date': DateTime.now().toIso8601String(),
-          'user_id': _currentUser?.id,
-          'user_name': _currentUser?.name,
-          'note': 'تحديث حالة طلب المطبخ إلى $status',
-        });
-      }
-      return updated;
-    });
-    notifyListeners();
-    return result;
-  }
-
-  Future<int> getKitchenPendingCount() async {
-    final rows = await _db!.rawQuery(
-      "SELECT COUNT(*) AS count FROM invoices WHERE status = 'completed' AND kitchen_status IN ('new','preparing','ready')",
-    );
-    return (rows.first['count'] as num?)?.toInt() ?? 0;
   }
 
   void logout() {
     _currentUser = null;
     _isLoggedIn = false;
     notifyListeners();
+  }
+
+  bool canManageCatalog() => isManager;
+  bool canManageFinance() => isManager;
+  bool canManageUsers() => isManager;
+  bool canVoidInvoice() => isManager;
+
+  // Shift Management
+  Future<void> openShift(double openingBalance) async {
+    if (!isLoggedIn) throw Exception('يجب تسجيل الدخول أولاً');
+    final now = DateTime.now().toIso8601String();
+    final id = await _db!.insert('shifts', {
+      'user_id': _currentUser!.id,
+      'opened_at': now,
+      'opening_balance': openingBalance,
+      'status': 'open',
+    });
+    _currentShift = Shift(
+      id: id,
+      userId: _currentUser!.id!,
+      userName: _currentUser!.name,
+      openedAt: now,
+      openingBalance: openingBalance,
+      status: 'open',
+    );
+    notifyListeners();
+  }
+
+  Future<void> closeShift(double closingBalance, {String? notes}) async {
+    if (_currentShift == null) return;
+    final now = DateTime.now().toIso8601String();
+    await _db!.update('shifts', {
+      'closed_at': now,
+      'closing_balance': closingBalance,
+      'status': 'closed',
+      'notes': notes,
+    }, where: 'id = ?', whereArgs: [_currentShift!.id]);
+    _currentShift = null;
+    notifyListeners();
+  }
+
+  Future<Shift?> getCurrentUserOpenShift() async {
+    if (!isLoggedIn) return null;
+    final rows = await _db!.query(
+      'shifts',
+      where: 'user_id = ? AND status = ?',
+      whereArgs: [_currentUser!.id, 'open'],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return Shift.fromMap(rows.first);
   }
 
   // Category CRUD
@@ -334,13 +133,6 @@ class AppProvider extends ChangeNotifier {
     return result;
   }
 
-  Future<int> deleteCategory(int id) async {
-    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await _db!.delete('categories', where: 'id = ?', whereArgs: [id]);
-    notifyListeners();
-    return result;
-  }
-
   // Product CRUD
   Future<int> addProduct(Product product) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
@@ -367,546 +159,237 @@ class AppProvider extends ChangeNotifier {
     return results.map((e) => Product.fromMap(e)).toList();
   }
 
-  Future<int> updateProduct(Product product) async {
-    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await _db!.update('products', {
-      'name': product.name,
-      'category_id': product.categoryId,
-      'price': product.price,
-      'cost': product.cost,
-      'description': product.description,
-      'image_path': product.imagePath,
-      'is_available': product.isAvailable ? 1 : 0,
-      'updated_at': DateTime.now().toIso8601String(),
-    }, where: 'id = ?', whereArgs: [product.id]);
-    notifyListeners();
-    return result;
-  }
-
   Future<int> deleteProduct(int id, {String? reason}) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
     final result = await DatabaseHelper.deleteProductSafe(
       id,
       userId: _currentUser?.id,
       userName: _currentUser?.name,
-      reason: _normalizeReason(reason),
+      reason: reason,
     );
     notifyListeners();
     return result;
   }
 
-  // ==================== PARKED POS ORDERS ====================
-
-  Future<int> savePendingOrder(List<CartItem> items, {String? customerName, double discountAmount = 0, String paymentMethod = 'cash'}) async {
-    if (!isLoggedIn) throw Exception('يجب تسجيل الدخول أولاً');
-    if (items.isEmpty) throw Exception('السلة فارغة');
-    return _db!.transaction<int>((txn) async {
-      final now = DateTime.now().toIso8601String();
-      final id = await txn.insert('pending_orders', {
-        'customer_name': customerName?.trim().isEmpty == true ? null : customerName?.trim(),
-        'discount_amount': discountAmount,
-        'payment_method': paymentMethod,
-        'created_at': now,
-        'updated_at': now,
-      });
-      for (final item in items) {
-        await txn.insert('pending_order_items', {
-          'pending_order_id': id,
-          'product_id': item.productId,
-          'product_name': item.productName,
-          'price': item.price,
-          'quantity': item.quantity,
-          'total': item.total,
-        });
-      }
-      return id;
-    });
-  }
-
-  Future<List<Map<String, dynamic>>> getPendingOrders() async {
-    return _db!.rawQuery('''
-      SELECT p.id, p.customer_name, p.discount_amount, p.payment_method, p.created_at, p.updated_at,
-             COALESCE(SUM(i.quantity), 0) AS item_count,
-             COALESCE(SUM(i.total), 0) AS subtotal
-      FROM pending_orders p
-      LEFT JOIN pending_order_items i ON i.pending_order_id = p.id
-      GROUP BY p.id
-      ORDER BY p.updated_at DESC
-    ''');
-  }
-
-  Future<Map<String, dynamic>?> getPendingOrderById(int id) async {
-    final orders = await _db!.query('pending_orders', where: 'id = ?', whereArgs: [id]);
-    if (orders.isEmpty) return null;
-    final items = await _db!.query('pending_order_items', where: 'pending_order_id = ?', whereArgs: [id], orderBy: 'id ASC');
-    return {'order': orders.first, 'items': items};
-  }
-
-  Future<int> deletePendingOrder(int id) async {
-    if (!isLoggedIn) throw Exception('يجب تسجيل الدخول أولاً');
-    final result = await _db!.delete('pending_orders', where: 'id = ?', whereArgs: [id]);
+  Future<int> deleteProductIngredient(int productId, int ingredientId, {String? reason}) async {
+    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
+    final result = await DatabaseHelper.deleteProductIngredientSafe(
+      productId,
+      ingredientId,
+      userId: _currentUser?.id,
+      userName: _currentUser?.name,
+      reason: reason,
+    );
     notifyListeners();
     return result;
   }
 
+  // ==================== MATERIALS & INVENTORY ====================
 
-  // ==================== CUSTOMERS & LOYALTY ====================
-
-  Future<List<Customer>> getCustomers({String query = ''}) async {
-    final rows = await _db!.query(
-      'customers',
-      where: query.trim().isEmpty ? 'is_active = 1' : 'is_active = 1 AND (name LIKE ? OR phone LIKE ?)',
-      whereArgs: query.trim().isEmpty ? null : ['%${query.trim()}%', '%${query.trim()}%'],
-      orderBy: 'name COLLATE NOCASE ASC',
-    );
-    return rows.map(Customer.fromMap).toList();
-  }
-
-  Future<Customer?> getCustomerById(int id) async {
-    final rows = await _db!.query('customers', where: 'id = ?', whereArgs: [id], limit: 1);
-    return rows.isEmpty ? null : Customer.fromMap(rows.first);
-  }
-
-  Future<int> addCustomer({required String name, String? phone, String? email, String? notes}) async {
-    if (!isLoggedIn) throw Exception('يجب تسجيل الدخول أولاً');
-    if (name.trim().isEmpty) throw Exception('اسم العميل مطلوب');
-    final existing = phone?.trim().isNotEmpty == true
-        ? await _db!.query('customers', where: 'phone = ? AND is_active = 1', whereArgs: [phone!.trim()], limit: 1)
-        : <Map<String, dynamic>>[];
-    if (existing.isNotEmpty) throw Exception('رقم الهاتف مرتبط بعميل آخر');
-    final id = await _db!.insert('customers', {
-      'name': name.trim(),
-      'phone': phone?.trim().isEmpty == true ? null : phone?.trim(),
-      'email': email?.trim().isEmpty == true ? null : email?.trim(),
-      'notes': notes?.trim().isEmpty == true ? null : notes?.trim(),
-      'is_active': 1,
-      'created_at': DateTime.now().toIso8601String(),
-      'updated_at': DateTime.now().toIso8601String(),
+  Future<int> addMaterial(MaterialModel material) async {
+    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
+    final now = DateTime.now().toIso8601String();
+    final data = material.toMap();
+    data['created_at'] = now;
+    data['updated_at'] = now;
+    final id = await _db!.insert('materials', data);
+    
+    await _db!.insert('inventory_audit_log', {
+      'action_date': now,
+      'action_type': 'material_created',
+      'ingredient_id': id,
+      'ingredient_name': material.name,
+      'quantity_before': 0,
+      'quantity_change': material.quantity,
+      'quantity_after': material.quantity,
+      'cost_price_at_action': material.costPrice,
+      'reference_type': 'manual',
+      'note': jsonEncode(DatabaseHelper.actorNoteForInventory(_currentUser?.id, _currentUser?.name, noteText: 'إضافة مادة جديدة')),
     });
+    
     notifyListeners();
     return id;
   }
 
-  Future<int> updateCustomer(Customer customer) async {
-    if (!isLoggedIn) throw Exception('يجب تسجيل الدخول أولاً');
-    if (customer.name.trim().isEmpty) throw Exception('اسم العميل مطلوب');
-    final result = await _db!.update('customers', {
-      'name': customer.name,
-      'phone': customer.phone,
-      'email': customer.email,
-      'points': customer.points,
-      'total_spent': customer.totalSpent,
-      'visit_count': customer.visitCount,
-      'notes': customer.notes,
-      'is_active': customer.isActive ? 1 : 0,
-      'updated_at': DateTime.now().toIso8601String(),
-    }, where: 'id = ?', whereArgs: [customer.id]);
+  Future<List<MaterialModel>> getMaterials() async {
+    final results = await _db!.query('materials', orderBy: 'name ASC');
+    return results.map((e) => MaterialModel.fromMap(e)).toList();
+  }
+
+  Future<int> updateMaterial(MaterialModel material) async {
+    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
+    final result = await _db!.update(
+      'materials',
+      {...material.toMap(), 'updated_at': DateTime.now().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [material.id],
+    );
     notifyListeners();
     return result;
   }
 
-  Future<int> deleteCustomer(int id) async {
-    if (!isManager) throw Exception('حذف العملاء متاح للمدير فقط');
-    final result = await _db!.update('customers', {'is_active': 0, 'updated_at': DateTime.now().toIso8601String()}, where: 'id = ?', whereArgs: [id]);
-    notifyListeners();
-    return result;
+  Future<int> deleteMaterialSafe(int id, {bool force = false, String? reason}) async {
+    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
+    try {
+      final r = await DatabaseHelper.deleteMaterialSafe(
+        id,
+        force: force,
+        userId: _currentUser?.id,
+        userName: _currentUser?.name,
+        reason: reason,
+      );
+      notifyListeners();
+      return r;
+    } on SafeDeleteBlockedException catch (e) {
+      throw Exception(e.message);
+    }
   }
 
-  Future<List<Map<String, dynamic>>> getCustomerPurchases(int customerId) async {
-    return _db!.rawQuery('''
-      SELECT id, invoice_number, total_amount, payment_method, status, created_at
-      FROM invoices
-      WHERE customer_id = ? AND status NOT IN ('cancelled','returned')
-      ORDER BY created_at DESC
-      LIMIT 100
-    ''', [customerId]);
+  Future<Map<String, dynamic>> getMaterialImpact(int id) async {
+    return await DatabaseHelper.getMaterialImpact(id);
   }
 
-  Future<Map<String, dynamic>> getCustomerStats(int customerId) async {
-    final rows = await _db!.rawQuery('''
-      SELECT COUNT(*) AS visits, COALESCE(SUM(total_amount),0) AS spent
-      FROM invoices WHERE customer_id = ? AND status NOT IN ('cancelled','returned')
-    ''', [customerId]);
-    final row = rows.first;
-    return {'visits': (row['visits'] as num?)?.toInt() ?? 0, 'spent': (row['spent'] as num?)?.toDouble() ?? 0};
+  Future<List<MaterialModel>> getLowStockMaterials() async {
+    final results = await _db!.query('materials', where: 'quantity <= min_quantity');
+    return results.map((e) => MaterialModel.fromMap(e)).toList();
   }
 
-  Future<int> getCustomerPoints(int customerId) async {
-    final customer = await getCustomerById(customerId);
-    return customer?.points ?? 0;
-  }
+  // ==================== RECIPES ====================
 
-  // Invoice CRUD
-  Future<int> createInvoice(Invoice invoice, List<CartItem> items) async {
-    if (await getCurrentUserOpenShift() == null) throw Exception('يجب فتح وردية قبل تسجيل المبيعات');
-    if (items.isEmpty) throw Exception('السلة فارغة');
-    // Financial integrity guard: never trust totals supplied by the UI.
-    // This keeps invoice records internally consistent even if another caller
-    // bypasses the checkout screen.
-    const epsilon = 0.01;
-    final calculatedSubtotal = items.fold<double>(0.0, (sum, item) {
-      if (item.quantity <= 0) {
-        throw Exception('كمية المنتج غير صالحة');
-      }
-      if (item.price < 0) {
-        throw Exception('سعر المنتج غير صالح');
-      }
-      return sum + item.total;
-    });
-
-    if ((invoice.subtotalAmount - calculatedSubtotal).abs() > epsilon) {
-      throw Exception('إجمالي الفاتورة الفرعي غير متطابق مع عناصر الفاتورة');
-    }
-    if (invoice.discountAmount < -epsilon ||
-        invoice.discountAmount - invoice.subtotalAmount > epsilon) {
-      throw Exception('قيمة الخصم غير صالحة');
-    }
-
-    final expectedTotal =
-        (invoice.subtotalAmount - invoice.discountAmount).clamp(0, double.infinity).toDouble();
-    if ((invoice.totalAmount - expectedTotal).abs() > epsilon) {
-      throw Exception('إجمالي الفاتورة غير متطابق مع الخصم');
-    }
-    if (invoice.paidAmount < -epsilon) {
-      throw Exception('المبلغ المدفوع غير صالح');
-    }
-
-    final paymentMethod = invoice.paymentMethod.trim().toLowerCase();
-    if (!{'cash', 'card', 'bank'}.contains(paymentMethod)) {
-      throw Exception('طريقة الدفع غير صالحة');
-    }
-
-    if (paymentMethod == 'cash') {
-      if (invoice.paidAmount + epsilon < invoice.totalAmount) {
-        throw Exception('المبلغ المدفوع أقل من إجمالي الفاتورة');
-      }
-      final expectedChange = invoice.paidAmount - invoice.totalAmount;
-      if ((invoice.changeAmount - expectedChange).abs() > epsilon) {
-        throw Exception('قيمة الباقي غير متطابقة مع المبلغ المدفوع');
-      }
-    } else {
-      if ((invoice.paidAmount - invoice.totalAmount).abs() > epsilon ||
-          invoice.changeAmount.abs() > epsilon) {
-        throw Exception('مبلغ الدفع لا يتطابق مع إجمالي الفاتورة');
-      }
-    }
-
-    final Map<int, double> requiredIngredients = {};
-    final Map<int, String> ingredientNames = {};
-    // Historical recipe snapshot (Phase 2.1): capture the CURRENT recipe as an
-    // immutable JSON record per invoice line, so Return/Void can restore the
-    // exact quantities originally deducted even after the recipe changes.
-    final Map<int, List<Map<String, dynamic>>> recipeSnapshots = {};
-    for (final item in items) {
-      final links = await DatabaseHelper.getProductIngredients(item.productId);
-      final snapshotRows = <Map<String, dynamic>>[];
-      for (final link in links) {
-        final ingredientId = link['ingredient_id'] as int;
-        final perUnit = (link['quantity'] as num).toDouble();
-        requiredIngredients[ingredientId] = (requiredIngredients[ingredientId] ?? 0) + perUnit * item.quantity;
-        ingredientNames[ingredientId] = link['ingredient_name'] as String;
-        snapshotRows.add({
-          'id': ingredientId,
-          'name': link['ingredient_name'] as String,
-          'qty': perUnit,
-          'cost': (link['cost_price'] as num?)?.toDouble() ?? 0.0,
+  Future<void> updateRecipe(String parentType, int parentId, List<RecipeModel> items) async {
+    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
+    await _db!.transaction((txn) async {
+      await txn.delete('recipes', where: 'parent_type = ? AND parent_id = ?', whereArgs: [parentType, parentId]);
+      for (var item in items) {
+        await txn.insert('recipes', {
+          'parent_type': parentType,
+          'parent_id': parentId,
+          'material_id': item.materialId,
+          'quantity': item.quantity,
+          'unit': item.unit,
         });
       }
-      recipeSnapshots[item.productId] = snapshotRows;
-    }
-    for (final entry in requiredIngredients.entries) {
-      final stock = await DatabaseHelper.getIngredientById(entry.key);
-      if (stock.isEmpty) throw Exception('المادة الخام "${ingredientNames[entry.key] ?? 'غير معروفة'}" غير موجودة في المخزون');
-      final available = (stock.first['quantity'] as num).toDouble();
-      if (available < entry.value) throw Exception('المادة الخام "${ingredientNames[entry.key]}" غير كافية لإتمام الطلب (متوفر: $available، مطلوب: ${entry.value})');
-    }
-    final costSnapshots = <int, double>{};
-    for (final item in items) {
-      costSnapshots[item.productId] = await calculateProductCost(item.productId);
-    }
+      if (parentType == 'product') {
+        await DatabaseHelper.recalculateProductCostsForIngredient(txn, -1, isFullProductRecalc: true, targetProductId: parentId);
+      } else if (parentType == 'material') {
+        await DatabaseHelper.recalculateProductCostsForIngredient(txn, parentId);
+      }
+    });
+    notifyListeners();
+  }
+
+  Future<List<RecipeModel>> getRecipes(String parentType, int parentId) async {
+    final results = await _db!.query('recipes', where: 'parent_type = ? AND parent_id = ?', whereArgs: [parentType, parentId]);
+    return results.map((e) => RecipeModel.fromMap(e)).toList();
+  }
+
+  // ==================== PRODUCTION ====================
+
+  Future<void> produceBatch(int materialId, double quantity, {String? notes}) async {
+    if (!isLoggedIn) throw Exception('يجب تسجيل الدخول أولاً');
     final now = DateTime.now().toIso8601String();
-    final invoiceId = await _db!.transaction<int>((txn) async {
-      final id = await txn.insert('invoices', {
-        'invoice_number': invoice.invoiceNumber,
-        'total_amount': invoice.totalAmount,
-        'status': invoice.status,
-        'payment_method': paymentMethod,
-        'customer_id': invoice.customerId,
-        'kitchen_status': 'new',
-        'subtotal_amount': invoice.subtotalAmount,
-        'discount_amount': invoice.discountAmount,
-        'paid_amount': invoice.paidAmount,
-        'change_amount': invoice.changeAmount,
-        'notes': invoice.notes,
+    await _db!.transaction((txn) async {
+      final matRows = await txn.query('materials', where: 'id = ?', whereArgs: [materialId]);
+      if (matRows.isEmpty) throw Exception('المادة غير موجودة');
+      final material = MaterialModel.fromMap(matRows.first);
+      
+      final allMaterialsRows = await txn.query('materials');
+      final allMaterials = {for (var m in allMaterialsRows) m['id'] as int: MaterialModel.fromMap(m)};
+      final allRecipesRows = await txn.query('recipes');
+      final allRecipes = <int, List<RecipeModel>>{};
+      for (var r in allRecipesRows) {
+        final pid = r['parent_id'] as int;
+        allRecipes[pid] ??= [];
+        allRecipes[pid]!.add(RecipeModel.fromMap(r));
+      }
+
+      final expanded = RecipeEngine.expandRecipe(
+        parentType: 'material',
+        parentId: materialId,
+        allRecipes: allRecipes,
+        allMaterials: allMaterials,
+        multiplier: quantity,
+      );
+
+      for (var entry in expanded.entries) {
+        final compId = entry.key;
+        final compQty = entry.value;
+        final comp = allMaterials[compId]!;
+        if (comp.quantity < compQty) throw Exception('نقص في المكون: ${comp.name}');
+        
+        await txn.rawUpdate('UPDATE materials SET quantity = quantity - ? WHERE id = ?', [compQty, compId]);
+        await txn.insert('inventory_audit_log', {
+          'action_date': now,
+          'action_type': 'production_consumption',
+          'ingredient_id': compId,
+          'ingredient_name': comp.name,
+          'quantity_before': comp.quantity,
+          'quantity_change': -compQty,
+          'quantity_after': comp.quantity - compQty,
+          'cost_price_at_action': comp.costPrice,
+          'reference_type': 'production',
+          'note': jsonEncode(DatabaseHelper.actorNoteForInventory(_currentUser?.id, _currentUser?.name, noteText: 'إنتاج ${material.name}')),
+        });
+      }
+
+      final unitCost = RecipeEngine.calculatePreparedMaterialCost(materialId: materialId, allRecipes: allRecipes, allMaterials: allMaterials);
+      final newQty = material.quantity + quantity;
+      final newWac = RecipeEngine.calculateWAC(
+        currentQty: material.quantity,
+        currentAvgCost: material.costPrice,
+        newQty: quantity,
+        newBatchCost: unitCost,
+      );
+
+      await txn.update('materials', {'quantity': newQty, 'cost_price': newWac, 'updated_at': now}, where: 'id = ?', whereArgs: [materialId]);
+      await txn.insert('production_batches', {
+        'material_id': materialId,
+        'quantity': quantity,
+        'unit_cost': unitCost,
+        'total_cost': unitCost * quantity,
+        'notes': notes,
         'created_at': now,
       });
-      for (final item in items) {
-        final productCostAtSale = costSnapshots[item.productId] ?? 0.0;
-        final unitProfit = item.price - productCostAtSale;
-        // Persist the immutable historical recipe snapshot inside the same
-        // atomic transaction (Phase 2.1). Never committed without the items.
-        final snapshotJson = encodeRecipeSnapshot(recipeSnapshots[item.productId]);
-        await txn.insert('invoice_items', {
-          'invoice_id': id, 'product_id': item.productId, 'product_name': item.productName,
-          'quantity': item.quantity, 'price': item.price, 'total': item.total,
-          'cost_snapshot': productCostAtSale, 'unit_profit': unitProfit,
-          'total_profit': unitProfit * item.quantity,
-          'recipe_snapshot': snapshotJson,
-        });
-      }
-      for (final entry in requiredIngredients.entries) {
-        final ingredientId = entry.key; final delta = entry.value;
-        final current = await txn.query('inventory', columns: ['quantity', 'cost_price', 'name'], where: 'id = ?', whereArgs: [ingredientId]);
-        if (current.isEmpty) throw Exception('تعذر الوصول إلى مادة المخزون');
-        final before = (current.first['quantity'] as num).toDouble();
-        final cost = (current.first['cost_price'] as num).toDouble();
-        final after = before - delta;
-        if (after < -0.000001) throw Exception('لا يمكن أن يصبح المخزون سالبًا');
-        await txn.update('inventory', {'quantity': after, 'updated_at': now}, where: 'id = ?', whereArgs: [ingredientId]);
-        // Phase 4.6.1 (NEW-F-01): actor attribution — the executor who
-        // completed the sale is never silently omitted from the audit row.
-        await txn.insert('inventory_audit_log', {
-          'action_date': now, 'action_type': 'sale', 'ingredient_id': ingredientId,
-          'ingredient_name': current.first['name'], 'quantity_before': before,
-          'quantity_change': -delta, 'quantity_after': after, 'cost_price_at_action': cost,
-          'reference_type': 'invoice', 'reference_id': id,
-          'note': jsonEncode(DatabaseHelper.actorNoteForInventory(
-            _currentUser?.id, _currentUser?.name,
-          )),
-        });
-      }
-      await txn.insert('invoice_audit_log', {
-        'invoice_id': id, 'action_type': 'created', 'action_date': now,
-        'user_id': _currentUser?.id, 'user_name': _currentUser?.name, 'note': 'تم إنشاء الفاتورة',
+      
+      await txn.insert('inventory_audit_log', {
+        'action_date': now,
+        'action_type': 'production_output',
+        'ingredient_id': materialId,
+        'ingredient_name': material.name,
+        'quantity_before': material.quantity,
+        'quantity_change': quantity,
+        'quantity_after': newQty,
+        'cost_price_at_action': newWac,
+        'reference_type': 'production',
+        'note': jsonEncode(DatabaseHelper.actorNoteForInventory(_currentUser?.id, _currentUser?.name, noteText: notes)),
       });
-      if (invoice.customerId != null) {
-        final customerRows = await txn.query('customers', where: 'id = ? AND is_active = 1', whereArgs: [invoice.customerId], limit: 1);
-        if (customerRows.isNotEmpty) {
-          // One point for every 10 currency units, based on the completed invoice total.
-          final earned = (invoice.totalAmount / 10).floor();
-          final currentPoints = (customerRows.first['points'] as num?)?.toInt() ?? 0;
-          final visits = (customerRows.first['visit_count'] as num?)?.toInt() ?? 0;
-          final spent = (customerRows.first['total_spent'] as num?)?.toDouble() ?? 0;
-          await txn.update('customers', {
-            'points': currentPoints + earned,
-            'visit_count': visits + 1,
-            'total_spent': spent + invoice.totalAmount,
-            'updated_at': now,
-          }, where: 'id = ?', whereArgs: [invoice.customerId]);
-          if (earned > 0) {
-            await txn.insert('customer_points_log', {
-              'customer_id': invoice.customerId,
-              'invoice_id': id,
-              'points_change': earned,
-              'reason': 'نقاط من شراء الفاتورة ${invoice.invoiceNumber}',
-              'created_at': now,
-            });
-          }
-        }
-      }
-      return id;
-    });
-    final lowStockIngredients = await DatabaseHelper.getLowStockIngredients();
-    if (lowStockIngredients.isNotEmpty) {
-      final names = lowStockIngredients.map((e) => e['name'] as String).toList();
-      final warning = 'تحذير: ${names.join('، ')}';
-      final notes = invoice.notes?.trim();
-      await _db!.update('invoices', {
-        'notes': notes == null || notes.isEmpty ? warning : '$notes\n$warning',
-      }, where: 'id = ?', whereArgs: [invoiceId]);
-    }
-    notifyListeners();
-    return invoiceId;
-  }
-
-  /// Returns the next human-friendly invoice number without relying on row count.
-  /// Using MAX(existing suffix) prevents duplicate numbers after invoice deletion.
-  Future<String> getNextInvoiceNumber() async {
-    final rows = await _db!.rawQuery(
-      "SELECT COALESCE(MAX(CAST(SUBSTR(invoice_number, 5) AS INTEGER)), 0) AS max_number FROM invoices WHERE invoice_number GLOB 'INV-[0-9]*'",
-    );
-    final maxNumber = (rows.first['max_number'] as num?)?.toInt() ?? 0;
-    return 'INV-${(maxNumber + 1).toString().padLeft(5, '0')}';
-  }
-
-  Future<List<Invoice>> getInvoices() async {
-    final results = await _db!.query('invoices', orderBy: 'created_at DESC');
-    return results.map((e) => Invoice.fromMap(e)).toList();
-  }
-
-  Future<Invoice?> getInvoiceById(int id) async {
-    final results = await _db!.query('invoices', where: 'id = ?', whereArgs: [id]);
-    if (results.isEmpty) return null;
-    final invoice = Invoice.fromMap(results.first);
-
-    final items = await _db!.query('invoice_items', where: 'invoice_id = ?', whereArgs: [id]);
-    final invoiceItems = items.map((e) => InvoiceItem.fromMap(e)).toList();
-    return Invoice(
-      id: invoice.id,
-      invoiceNumber: invoice.invoiceNumber,
-      totalAmount: invoice.totalAmount,
-      subtotalAmount: invoice.subtotalAmount,
-      discountAmount: invoice.discountAmount,
-      paidAmount: invoice.paidAmount,
-      changeAmount: invoice.changeAmount,
-      status: invoice.status,
-      paymentMethod: invoice.paymentMethod,
-      customerId: invoice.customerId,
-      notes: invoice.notes,
-      createdAt: invoice.createdAt,
-      items: invoiceItems,
-    );
-  }
-
-  Future<List<Invoice>> searchInvoices(String query) async {
-    final results = await _db!.query(
-      'invoices',
-      where: 'invoice_number LIKE ?',
-      whereArgs: ['%$query%'],
-      orderBy: 'created_at DESC',
-    );
-    return results.map((e) => Invoice.fromMap(e)).toList();
-  }
-
-  /// Fully returns a completed invoice, restoring recipe ingredients exactly once.
-  Future<int> returnInvoice(int id) async {
-    if (!canVoidInvoice()) throw Exception('استرجاع الفواتير متاح للمدير فقط');
-    final result = await _db!.transaction<int>((txn) async {
-      final rows = await txn.query('invoices', where: 'id = ?', whereArgs: [id]);
-      if (rows.isEmpty) return 0;
-      final status = rows.first['status']?.toString();
-      if (status == 'returned') return 0;
-      if (status == 'cancelled') throw Exception('الفاتورة ملغاة بالفعل');
-      final items = await txn.query('invoice_items', where: 'invoice_id = ?', whereArgs: [id]);
-      final now = DateTime.now().toIso8601String();
-      // Phase 2.1: restore from the immutable historical recipe snapshot when
-      // present; never read current product_ingredients for snapshot-backed
-      // lines (that is the P0 corruption described in the Phase 2.0 audit).
-      await restoreInventoryFromSnapshots(txn, items, id, now, 'sale_returned', 'استرجاع', userId: _currentUser?.id, userName: _currentUser?.name);
-      final customerId = rows.first['customer_id'] as int?;
-      if (customerId != null) {
-        final customerRows = await txn.query('customers', where: 'id = ?', whereArgs: [customerId], limit: 1);
-        if (customerRows.isNotEmpty) {
-          // Reverse the points actually awarded to this invoice instead of
-          // recalculating from the current loyalty rule.
-          final pointLogs = await txn.query(
-            'customer_points_log',
-            columns: ['points_change'],
-            where: 'invoice_id = ? AND points_change > 0',
-            whereArgs: [id],
-          );
-          final points = pointLogs.fold<int>(
-            0,
-            (sum, row) => sum + ((row['points_change'] as num?)?.toInt() ?? 0),
-          );
-          final currentPoints = (customerRows.first['points'] as num?)?.toInt() ?? 0;
-          final visits = (customerRows.first['visit_count'] as num?)?.toInt() ?? 0;
-          final spent = (customerRows.first['total_spent'] as num?)?.toDouble() ?? 0;
-          await txn.update('customers', {
-            'points': (currentPoints - points).clamp(0, 1 << 30),
-            'visit_count': (visits - 1).clamp(0, 1 << 30),
-            'total_spent': (spent - ((rows.first['total_amount'] as num?)?.toDouble() ?? 0)).clamp(0, double.infinity),
-            'updated_at': now,
-          }, where: 'id = ?', whereArgs: [customerId]);
-          if (points > 0) {
-            await txn.insert('customer_points_log', {
-              'customer_id': customerId, 'invoice_id': id, 'points_change': -points,
-              'reason': 'خصم نقاط العميل بسبب استرجاع الفاتورة', 'created_at': now,
-            });
-          }
-        }
-      }
-      final existingNotes = rows.first['notes']?.toString().trim();
-      await txn.update('invoices', {
-        'status': 'returned',
-        'kitchen_status': 'done',
-        'notes': existingNotes == null || existingNotes.isEmpty
-            ? 'تم استرجاع الفاتورة'
-            : '$existingNotes\nتم استرجاع الفاتورة',
-      }, where: 'id = ?', whereArgs: [id]);
-      await txn.insert('invoice_audit_log', {
-        'invoice_id': id, 'action_type': 'returned', 'action_date': now,
-        'user_id': _currentUser?.id, 'user_name': _currentUser?.name, 'note': 'استرجاع كامل للفاتورة',
-      });
-      return 1;
+      
+      await DatabaseHelper.recalculateProductCostsForIngredient(txn, materialId);
     });
     notifyListeners();
-    return result;
   }
 
-  /// Cancels an invoice instead of physically deleting it, preserving the audit trail.
-  Future<int> voidInvoice(int id) async {
-    if (!canVoidInvoice()) throw Exception('إلغاء الفواتير متاح للمدير فقط');
-    final result = await _db!.transaction<int>((txn) async {
-      final rows = await txn.query('invoices', where: 'id = ?', whereArgs: [id]);
-      if (rows.isEmpty || rows.first['status'] == 'cancelled' || rows.first['status'] == 'returned') return 0;
-      final items = await txn.query('invoice_items', where: 'invoice_id = ?', whereArgs: [id]);
-      final now = DateTime.now().toIso8601String();
-      // Phase 2.1: restore from the immutable historical recipe snapshot when
-      // present; never read current product_ingredients for snapshot-backed
-      // lines (that is the P0 corruption described in the Phase 2.0 audit).
-      await restoreInventoryFromSnapshots(txn, items, id, now, 'sale_cancelled', 'إلغاء', userId: _currentUser?.id, userName: _currentUser?.name);
-      final customerId = rows.first['customer_id'] as int?;
-      if (customerId != null) {
-        final customerRows = await txn.query('customers', where: 'id = ?', whereArgs: [customerId], limit: 1);
-        if (customerRows.isNotEmpty) {
-          // Reverse the points actually awarded to this invoice instead of
-          // recalculating from the current loyalty rule.
-          final pointLogs = await txn.query(
-            'customer_points_log',
-            columns: ['points_change'],
-            where: 'invoice_id = ? AND points_change > 0',
-            whereArgs: [id],
-          );
-          final points = pointLogs.fold<int>(
-            0,
-            (sum, row) => sum + ((row['points_change'] as num?)?.toInt() ?? 0),
-          );
-          final currentPoints = (customerRows.first['points'] as num?)?.toInt() ?? 0;
-          final visits = (customerRows.first['visit_count'] as num?)?.toInt() ?? 0;
-          final spent = (customerRows.first['total_spent'] as num?)?.toDouble() ?? 0;
-          await txn.update('customers', {
-            'points': (currentPoints - points).clamp(0, 1 << 30),
-            'visit_count': (visits - 1).clamp(0, 1 << 30),
-            'total_spent': (spent - ((rows.first['total_amount'] as num?)?.toDouble() ?? 0)).clamp(0, double.infinity),
-            'updated_at': now,
-          }, where: 'id = ?', whereArgs: [customerId]);
-          if (points > 0) {
-            await txn.insert('customer_points_log', {
-              'customer_id': customerId, 'invoice_id': id, 'points_change': -points,
-              'reason': 'خصم نقاط العميل بسبب إلغاء الفاتورة', 'created_at': now,
-            });
-          }
-        }
-      }
-      final existingNotes = rows.first['notes']?.toString().trim();
-      final updated = await txn.update('invoices', {
-        'status': 'cancelled',
-        'kitchen_status': 'done',
-        'notes': existingNotes == null || existingNotes.isEmpty
-            ? 'تم إلغاء الفاتورة'
-            : '$existingNotes\nتم إلغاء الفاتورة',
-      }, where: 'id = ? AND status != ?', whereArgs: [id, 'cancelled']);
-      if (updated > 0) {
-        await txn.insert('invoice_audit_log', {
-          'invoice_id': id, 'action_type': 'cancelled', 'action_date': now,
-          'user_id': _currentUser?.id, 'user_name': _currentUser?.name,
-          'note': 'تم إلغاء الفاتورة وإرجاع المخزون',
-        });
-      }
-      return updated;
-    });
+  // ==================== PROCUREMENT ====================
+
+  Future<int> addSupplier(Supplier supplier) async {
+    final id = await _db!.insert('suppliers', supplier.toMap());
     notifyListeners();
-    return result;
+    return id;
   }
 
-  Future<int> deleteInvoice(int id) => voidInvoice(id);
+  Future<List<Supplier>> getSuppliers() async {
+    final results = await _db!.query('suppliers', orderBy: 'name ASC');
+    return results.map((e) => Supplier.fromMap(e)).toList();
+  }
 
-  // ==================== PHASE 2.1 — HISTORICAL RECIPE SNAPSHOT ====================
+  Future<int> createPurchaseInvoice(PurchaseInvoice invoice, List<PurchaseItem> items) async {
+    final id = await DatabaseHelper.insertPurchaseInvoice(invoice, items, userId: _currentUser?.id, userName: _currentUser?.name);
+    notifyListeners();
+    return id;
+  }
 
-  /// Serializes a recipe snapshot (per invoice line) to immutable JSON.
-  /// Guards against NaN/Infinity and empty recipes. Never fails with a format
-  /// error that could break the sale transaction.
+  // ==================== SALES ====================
+
   static String encodeRecipeSnapshot(List<Map<String, dynamic>>? rows) {
     if (rows == null || rows.isEmpty) return '[]';
     final safe = <Map<String, dynamic>>[];
@@ -915,22 +398,13 @@ class AppProvider extends ChangeNotifier {
       final qty = (row['qty'] as num?)?.toDouble() ?? 0.0;
       if (id == null || !qty.isFinite || qty < 0) continue;
       final cost = (row['cost'] as num?)?.toDouble() ?? 0.0;
-      // cost must be finite before insertion: NaN.clamp(0, inf) yields
-      // Infinity, which jsonEncode would reject — fatal inside a sale
-      // transaction. Drop the row instead (same policy as invalid qty).
       if (!cost.isFinite || cost < 0) continue;
-      safe.add({
-        'id': id,
-        'name': (row['name'] as String?) ?? '',
-        'qty': qty,
-        'cost': cost,
-      });
+      safe.add({'id': id, 'name': (row['name'] as String?) ?? '', 'qty': qty, 'cost': cost});
     }
     safe.sort((a, b) => (a['id'] as int).compareTo(b['id'] as int));
     return jsonEncode({'v': 1, 'ingredients': safe});
   }
 
-  /// Decodes a stored recipe snapshot. Returns null when absent or malformed.
   static List<Map<String, dynamic>>? readRecipeSnapshot(String? jsonText) {
     if (jsonText == null || jsonText.trim().isEmpty) return null;
     try {
@@ -942,904 +416,653 @@ class AppProvider extends ChangeNotifier {
       for (final entry in ingredients) {
         if (entry is! Map) continue;
         final id = entry['id'] is int ? entry['id'] as int : int.tryParse(entry['id'].toString());
-        final qty = (entry['qty'] is num)
-            ? (entry['qty'] as num).toDouble()
-            : double.tryParse(entry['qty'].toString());
+        final qty = (entry['qty'] is num) ? (entry['qty'] as num).toDouble() : double.tryParse(entry['qty'].toString());
         if (id == null || qty == null || !qty.isFinite || qty < 0) continue;
-        out.add({'id': id, 'name': entry['name']?.toString() ?? '', 'qty': qty,
-          'cost': (entry['cost'] is num) ? (entry['cost'] as num).toDouble().clamp(0, double.infinity) : 0.0});
+        out.add({
+          'id': id, 'name': entry['name']?.toString() ?? '', 'qty': qty,
+          'cost': (entry['cost'] is num) ? (entry['cost'] as num).toDouble().clamp(0, double.infinity) : 0.0
+        });
       }
       return out;
-    } catch (_) {
-      return null;
-    }
+    } catch (_) { return null; }
   }
 
-  /// Restores inventory for Return/Void.
-  ///
-  /// Policy (documented, no silent false precision):
-  /// - Items WITH a historical recipe_snapshot: restore exactly what was
-  ///   originally deducted (`snapshot.qty × soldQty`). The current recipe is
-  ///   NEVER consulted for these lines — this is the P0 fix.
-  /// - Items WITHOUT a snapshot (legacy invoices created before v16): restoring
-  ///   from the current recipe is the ONLY recoverable source, but it is
-  ///   explicitly documented per restored link (`LEGACY_FALLBACK`) AND per
-  ///   line the restoration outcome is recorded — a line whose product has no
-  ///   current recipe links at all gets a `LEGACY_FALLBACK_NO_RECIPE_LINKS`
-  ///   audit row instead of silently restoring nothing (L-1). No legacy line
-  ///   ever leaves the audit log without a trace.
-  /// - Duplicate product lines: each invoice item row carries its own
-  ///   snapshot, so every line restores independently without overwriting.
-  /// Returns the list of diagnostic notes produced for legacy lines so
-  /// callers can surface them (e.g. manager report, UI warning).
-  /// All mutations happen inside the caller's transaction — a failure in any
-  /// step rolls back status, inventory, and audit together.
-  // Phase 4.6.1 (NEW-F-01): optional actor attribution — the user who
-  // triggered the return/void is written into every audit row produced here.
-  Future<List<String>> restoreInventoryFromSnapshots(
-    Transaction txn, List<Map<String, dynamic>> items, int invoiceId,
-    String now, String actionType, String _notePrefix, {
-    int? userId,
-    String? userName,
-  }) async {
-    bool anyLegacy = false;
-    final diagnostics = <String>[];
-    for (final item in items) {
-      final productId = item['product_id'] as int;
-      final soldQty = (item['quantity'] as num).toDouble();
-      final snapshotJson = item['recipe_snapshot']?.toString();
-      final snapshot = readRecipeSnapshot(snapshotJson);
-      if (snapshot == null || snapshot.isEmpty) {
-        // LEGACY invoice line: current-recipe fallback, explicitly documented.
-        anyLegacy = true;
-        final links = await txn.rawQuery(
-          'SELECT pi.ingredient_id, pi.quantity, inv.name, inv.quantity AS current_quantity, inv.cost_price '
-          'FROM product_ingredients pi INNER JOIN inventory inv ON pi.ingredient_id = inv.id WHERE pi.product_id = ?', [productId]);
-        if (links.isEmpty) {
-          // The product has NO current recipe links: restoring nothing would
-          // be silently wrong, and fabricating quantities would be false
-          // confidence. Log an explicit diagnostic audit row so this line's
-          // fate is provable from the audit log (never silent).
-          final productRows = await txn.query(
-            'products', columns: ['name'], where: 'id = ?', whereArgs: [productId],
+  Future<int> createInvoice(Invoice invoice, List<CartItem> items) async {
+    if (await getCurrentUserOpenShift() == null) throw Exception('يجب فتح وردية قبل تسجيل المبيعات');
+    if (items.isEmpty) throw Exception('السلة فارغة');
+    
+    // Bad totals guard: Phase 4.3.1.1 atomicity proof
+    final actualSubtotal = items.fold<double>(0, (s, i) => s + i.price * i.quantity);
+    if ((invoice.subtotalAmount - actualSubtotal).abs() > 0.001) {
+      throw Exception('فشل التحقق من الإجمالي: إجمالي السطور لا يطابق إجمالي الفاتورة');
+    }
+    
+    if (invoice.discountAmount > invoice.subtotalAmount) {
+      throw Exception('قيمة الخصم لا يمكن أن تتجاوز إجمالي الفاتورة');
+    }
+
+    final now = DateTime.now().toIso8601String();
+    final result = await _db!.transaction<int>((txn) async {
+      final allMaterialsRows = await txn.query('materials');
+      final allMaterials = {for (var m in allMaterialsRows) m['id'] as int: MaterialModel.fromMap(m)};
+      final allRecipesRows = await txn.query('recipes');
+      final allRecipes = <int, List<RecipeModel>>{};
+      for (var r in allRecipesRows) {
+        final pid = r['parent_id'] as int;
+        allRecipes[pid] ??= [];
+        allRecipes[pid]!.add(RecipeModel.fromMap(r));
+      }
+
+      final Map<int, double> totalRequirements = {};
+      final Map<int, double> legacyRequirements = {};
+      for (final item in items) {
+        if (allRecipes.containsKey(item.productId)) {
+          final expanded = RecipeEngine.expandRecipe(
+            parentType: 'product', parentId: item.productId, allRecipes: allRecipes, allMaterials: allMaterials, multiplier: item.quantity.toDouble(), deductPreparedStock: true,
           );
-          final productName = productRows.isNotEmpty ? productRows.first['name'] as String? : null;
-          await txn.insert('inventory_audit_log', {
-            'action_date': now, 'action_type': actionType, 'ingredient_id': null,
-            'ingredient_name': productName,
-            'quantity_before': 0, 'quantity_change': 0, 'quantity_after': 0,
-            'cost_price_at_action': 0,
-            'reference_type': 'invoice', 'reference_id': invoiceId,
-            // Phase 4.6.1 (NEW-F-01): diagnostic preserved + actor attribution.
-            'note': jsonEncode(DatabaseHelper.actorNoteForInventory(
-              userId, userName, noteText: 'LEGACY_FALLBACK_NO_RECIPE_LINKS',
-            )),
-          });
-          diagnostics.add('LEGACY_FALLBACK_NO_RECIPE_LINKS:product=$productId');
+          for (final entry in expanded.entries) {
+            totalRequirements[entry.key] = (totalRequirements[entry.key] ?? 0) + entry.value;
+          }
         } else {
+          // Legacy path
+          final links = await txn.rawQuery('''
+            SELECT pi.ingredient_id, pi.quantity, inv.name, inv.quantity as current_stock
+            FROM product_ingredients pi
+            INNER JOIN inventory inv ON pi.ingredient_id = inv.id
+            WHERE pi.product_id = ?
+          ''', [item.productId]);
           for (final link in links) {
             final ingredientId = link['ingredient_id'] as int;
-            final restore = (link['quantity'] as num).toDouble() * soldQty;
-            final before = (link['current_quantity'] as num).toDouble();
-            final after = before + restore;
-            await txn.update('inventory', {'quantity': after, 'updated_at': now}, where: 'id = ?', whereArgs: [ingredientId]);
-            // Phase 4.6.1 (NEW-F-01): diagnostic preserved + actor attribution.
+            final required = (link['quantity'] as num).toDouble() * item.quantity;
+            final currentStock = (link['current_stock'] as num).toDouble();
+            if (currentStock < required) {
+              throw Exception('المخزون غير كافٍ (Legacy): ${link['name']}');
+            }
+            legacyRequirements[ingredientId] = (legacyRequirements[ingredientId] ?? 0) + required;
+          }
+        }
+      }
+
+      for (final entry in totalRequirements.entries) {
+        final mat = allMaterials[entry.key];
+        if (mat == null || mat.quantity < entry.value) {
+          throw Exception('المخزون غير كافٍ: ${mat?.name ?? entry.key}');
+        }
+      }
+      for (final entry in legacyRequirements.entries) {
+        final rows = await txn.query('inventory', columns: ['name', 'quantity'], where: 'id = ?', whereArgs: [entry.key]);
+        if (rows.isEmpty) throw Exception('المكون #${entry.key} غير موجود');
+        final current = (rows.first['quantity'] as num).toDouble();
+        if (current < entry.value) {
+          throw Exception('المكون "${rows.first['name']}" غير كافٍ (متوفر: $current، مطلوب: ${entry.value})');
+        }
+      }
+
+      final invoiceId = await txn.insert('invoices', {
+        'invoice_number': invoice.invoiceNumber,
+        'total_amount': invoice.totalAmount,
+        'status': invoice.status,
+        'payment_method': invoice.paymentMethod,
+        'customer_id': invoice.customerId,
+        'kitchen_status': 'new',
+        'subtotal_amount': invoice.subtotalAmount,
+        'discount_amount': invoice.discountAmount,
+        'paid_amount': invoice.paidAmount,
+        'change_amount': invoice.changeAmount,
+        'notes': invoice.notes,
+        'created_at': invoice.createdAt ?? now,
+      });
+
+      for (final item in items) {
+        if (allRecipes.containsKey(item.productId)) {
+          final productCostAtSale = RecipeEngine.calculateProductCost(productId: item.productId, allRecipes: allRecipes, allMaterials: allMaterials);
+          final unitProfit = item.price - productCostAtSale;
+          final expanded = RecipeEngine.expandRecipe(
+            parentType: 'product', parentId: item.productId, allRecipes: allRecipes, allMaterials: allMaterials, multiplier: 1.0, deductPreparedStock: true,
+          );
+          final snapshotRows = expanded.entries.map((e) => {
+            'id': e.key, 'name': allMaterials[e.key]?.name ?? 'Unknown', 'qty': e.value, 'cost': allMaterials[e.key]?.costPrice ?? 0.0,
+          }).toList();
+          await txn.insert('invoice_items', {
+            'invoice_id': invoiceId, 'product_id': item.productId, 'product_name': item.productName, 'quantity': item.quantity, 'price': item.price, 'total': item.total,
+            'cost_snapshot': productCostAtSale, 'unit_profit': unitProfit, 'total_profit': unitProfit * item.quantity, 'recipe_snapshot': encodeRecipeSnapshot(snapshotRows), 'created_at': invoice.createdAt ?? now,
+          });
+          for (final entry in expanded.entries) {
+            final matId = entry.key;
+            final deduct = entry.value * item.quantity;
+            final mat = allMaterials[matId]!;
+            await txn.rawUpdate('UPDATE materials SET quantity = quantity - ?, updated_at = ? WHERE id = ?', [deduct, now, matId]);
             await txn.insert('inventory_audit_log', {
-              'action_date': now, 'action_type': actionType, 'ingredient_id': ingredientId,
-              'ingredient_name': link['name'], 'quantity_before': before, 'quantity_change': restore,
-              'quantity_after': after, 'cost_price_at_action': link['cost_price'],
-              'reference_type': 'invoice', 'reference_id': invoiceId,
+              'action_date': now, 'action_type': 'sale', 'ingredient_id': matId, 'ingredient_name': mat.name,
+              'quantity_before': mat.quantity, 'quantity_change': -deduct, 'quantity_after': mat.quantity - deduct,
+              'cost_price_at_action': mat.costPrice, 'reference_type': 'invoice', 'reference_id': invoiceId,
+              'note': jsonEncode(DatabaseHelper.actorNoteForInventory(_currentUser?.id, _currentUser?.name)),
+            });
+            allMaterials[matId] = mat.copyWith(quantity: mat.quantity - deduct);
+          }
+        } else {
+          // Legacy Path
+          final links = await txn.rawQuery('''
+            SELECT pi.ingredient_id, pi.quantity, inv.name, inv.quantity as current_stock, inv.cost_price
+            FROM product_ingredients pi
+            INNER JOIN inventory inv ON pi.ingredient_id = inv.id
+            WHERE pi.product_id = ?
+          ''', [item.productId]);
+          double legacyCost = 0;
+          final snapshotRows = <Map<String, dynamic>>[];
+          for (final link in links) {
+            final q = (link['quantity'] as num).toDouble();
+            final c = (link['cost_price'] as num).toDouble();
+            legacyCost += q * c;
+            snapshotRows.add({'id': link['ingredient_id'], 'name': link['name'], 'qty': q, 'cost': c});
+          }
+          final unitProfit = item.price - legacyCost;
+          await txn.insert('invoice_items', {
+            'invoice_id': invoiceId, 'product_id': item.productId, 'product_name': item.productName, 'quantity': item.quantity, 'price': item.price, 'total': item.total,
+            'cost_snapshot': legacyCost, 'unit_profit': unitProfit, 'total_profit': unitProfit * item.quantity, 'recipe_snapshot': encodeRecipeSnapshot(snapshotRows), 'created_at': invoice.createdAt ?? now,
+          });
+          for (final link in links) {
+            final ingredientId = link['ingredient_id'] as int;
+            final deduct = (link['quantity'] as num).toDouble() * item.quantity;
+            final before = (link['current_stock'] as num).toDouble();
+            
+            await txn.rawUpdate(
+              'UPDATE inventory SET quantity = quantity - ?, updated_at = ? WHERE id = ?',
+              [deduct, now, ingredientId]
+            );
+
+            await txn.insert('inventory_audit_log', {
+              'action_date': now,
+              'action_type': 'sale',
+              'ingredient_id': ingredientId,
+              'ingredient_name': link['name'],
+              'quantity_before': before,
+              'quantity_change': -deduct,
+              'quantity_after': before - deduct,
+              'cost_price_at_action': link['cost_price'],
+              'reference_type': 'invoice',
+              'reference_id': invoiceId,
               'note': jsonEncode(DatabaseHelper.actorNoteForInventory(
-                userId, userName, noteText: 'LEGACY_FALLBACK',
+                _currentUser?.id, _currentUser?.name
               )),
             });
           }
-          diagnostics.add('LEGACY_FALLBACK:${links.length}_links:product=$productId');
         }
-        continue;
       }
-      // Snapshot-backed line: restore exactly what was deducted
-      // (snapshot.qty × soldQty) per snapshot row. If a referenced ingredient
-      // no longer exists (deleted after sale), log a zero-change audit row
-      // instead of silently skipping, so the audit trail stays complete.
-      for (final row in snapshot) {
-        final ingredientId = row['id'] as int;
-        final restore = (row['qty'] as double) * soldQty;
-        final current = await txn.query('inventory', columns: ['quantity', 'cost_price', 'name'], where: 'id = ?', whereArgs: [ingredientId]);
-        if (current.isEmpty) {
-          // Phase 4.6.1 (NEW-F-01): diagnostic preserved + actor attribution.
-          await txn.insert('inventory_audit_log', {
-            'action_date': now, 'action_type': actionType, 'ingredient_id': ingredientId,
-            'ingredient_name': row['name'], 'quantity_before': 0,
-            'quantity_change': 0, 'quantity_after': 0, 'cost_price_at_action': (row['cost'] as num?)?.toDouble() ?? 0.0,
-            'reference_type': 'invoice', 'reference_id': invoiceId,
-            'note': jsonEncode(DatabaseHelper.actorNoteForInventory(
-              userId, userName, noteText: 'SNAPSHOT_ONLY_INGREDIENT_DELETED',
-            )),
-          });
-          continue;
-        }
-        final before = (current.first['quantity'] as num).toDouble();
-        final after = before + restore;
-        await txn.update('inventory', {'quantity': after, 'updated_at': now}, where: 'id = ?', whereArgs: [ingredientId]);
-        // Phase 4.6.1 (NEW-F-01): diagnostic preserved + actor attribution.
-        await txn.insert('inventory_audit_log', {
-          'action_date': now, 'action_type': actionType, 'ingredient_id': ingredientId,
-          'ingredient_name': row['name'] ?? current.first['name'], 'quantity_before': before, 'quantity_change': restore,
-          'quantity_after': after, 'cost_price_at_action': (current.first['cost_price'] as num?)?.toDouble() ?? 0.0,
-          'reference_type': 'invoice', 'reference_id': invoiceId,
-          'note': jsonEncode(DatabaseHelper.actorNoteForInventory(
-            userId, userName, noteText: 'HISTORICAL_SNAPSHOT',
-          )),
-        });
-      }
-    }
-    return diagnostics;
-  }
-
-  // Expense CRUD
-  Future<int> addExpense(Expense expense) async {
-    if (!canManageFinance()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await _db!.insert('expenses', {
-      'name': expense.name,
-      'amount': expense.amount,
-      'date': expense.date,
-      'notes': expense.notes,
-      'created_at': DateTime.now().toIso8601String(),
+      return invoiceId;
     });
     notifyListeners();
     return result;
   }
 
-  Future<List<Expense>> getExpenses() async {
-    if (!canManageFinance()) throw Exception('هذه البيانات متاحة للمدير فقط');
-    final results = await _db!.query('expenses', orderBy: 'date DESC');
-    return results.map((e) => Expense.fromMap(e)).toList();
+  Future<String> getNextInvoiceNumber() async {
+    final rows = await _db!.rawQuery("SELECT MAX(id) as max_id FROM invoices");
+    final maxId = (rows.first['max_id'] as num?)?.toInt() ?? 0;
+    return 'INV-${(maxId + 1).toString().padLeft(5, '0')}';
   }
 
-  Future<int> updateExpense(Expense expense) async {
-    if (!canManageFinance()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await _db!.update('expenses', {
-      'name': expense.name,
-      'amount': expense.amount,
-      'date': expense.date,
-      'notes': expense.notes,
-    }, where: 'id = ?', whereArgs: [expense.id]);
+  Future<List<Invoice>> getInvoices() async {
+    final results = await _db!.query('invoices', orderBy: 'created_at DESC');
+    return results.map((e) => Invoice.fromMap(e)).toList();
+  }
+
+  Future<Invoice?> getInvoiceById(int id) async {
+    final results = await _db!.query('invoices', where: 'id = ?', whereArgs: [id]);
+    if (results.isEmpty) return null;
+    final items = await _db!.query('invoice_items', where: 'invoice_id = ?', whereArgs: [id]);
+    final invoice = Invoice.fromMap(results.first);
+    return invoice.copyWith(items: items.map((e) => InvoiceItem.fromMap(e)).toList());
+  }
+
+  Future<int> returnInvoice(int id) async {
+    if (!canVoidInvoice()) throw Exception('استرجاع الفواتير متاح للمدير فقط');
+    final result = await _db!.transaction<int>((txn) async {
+      final rows = await txn.query('invoices', where: 'id = ?', whereArgs: [id]);
+      if (rows.isEmpty || rows.first['status'] == 'cancelled' || rows.first['status'] == 'returned') return 0;
+      final items = await txn.query('invoice_items', where: 'invoice_id = ?', whereArgs: [id]);
+      final now = DateTime.now().toIso8601String();
+
+      for (var item in items) {
+        final snapshot = readRecipeSnapshot(item['recipe_snapshot']?.toString());
+        if (snapshot != null) {
+          for (var row in snapshot) {
+            final matId = row['id'] as int;
+            final restore = (row['qty'] as double) * (item['quantity'] as num).toDouble();
+            
+            // Try Materials path
+            final matRows = await txn.query('materials', where: 'id = ?', whereArgs: [matId]);
+            if (matRows.isNotEmpty) {
+              final mat = MaterialModel.fromMap(matRows.first);
+              await txn.rawUpdate('UPDATE materials SET quantity = quantity + ? WHERE id = ?', [restore, matId]);
+              await DatabaseHelper.logInventoryAudit(
+                db: txn, ingredientId: matId, ingredientName: mat.name, actionType: 'sale_returned',
+                quantityBefore: mat.quantity, quantityChange: restore, quantityAfter: mat.quantity + restore,
+                costPriceAtAction: mat.costPrice, referenceType: 'invoice', referenceId: id,
+                userId: _currentUser?.id, userName: _currentUser?.name, note: 'HISTORICAL_SNAPSHOT',
+              );
+            } else {
+              // Legacy Fallback
+              final invRows = await txn.query('inventory', where: 'id = ?', whereArgs: [matId]);
+              if (invRows.isNotEmpty) {
+                final oldQty = (invRows.first['quantity'] as num).toDouble();
+                await txn.rawUpdate('UPDATE inventory SET quantity = quantity + ? WHERE id = ?', [restore, matId]);
+                await DatabaseHelper.logInventoryAudit(
+                  db: txn, ingredientId: matId, ingredientName: invRows.first['name'] as String?, actionType: 'sale_returned',
+                  quantityBefore: oldQty, quantityChange: restore, quantityAfter: oldQty + restore,
+                  costPriceAtAction: (invRows.first['cost_price'] as num).toDouble(), referenceType: 'invoice', referenceId: id,
+                  userId: _currentUser?.id, userName: _currentUser?.name, note: 'HISTORICAL_SNAPSHOT',
+                );
+              }
+            }
+          }
+        } else {
+          // Fallback to current recipe links (Phase 2.2 fallback)
+          final productId = item['product_id'] as int;
+          final qty = (item['quantity'] as num).toDouble();
+          
+          final links = await txn.rawQuery('''
+            SELECT pi.ingredient_id, pi.quantity, inv.name, inv.quantity as current_stock, inv.cost_price
+            FROM product_ingredients pi
+            INNER JOIN inventory inv ON pi.ingredient_id = inv.id
+            WHERE pi.product_id = ?
+          ''', [productId]);
+          
+          if (links.isEmpty) {
+            // Diagnostic row for empty legacy restoration (L-1)
+            await DatabaseHelper.logInventoryAudit(
+              db: txn, ingredientId: 0, ingredientName: 'PRODUCT_WITHOUT_LINKS', actionType: 'sale_returned',
+              quantityBefore: 0, quantityChange: 0, quantityAfter: 0,
+              costPriceAtAction: 0, referenceType: 'invoice', referenceId: id,
+              userId: _currentUser?.id, userName: _currentUser?.name, note: 'LEGACY_FALLBACK_NO_RECIPE_LINKS',
+            );
+          } else {
+            for (final link in links) {
+              final ingredientId = link['ingredient_id'] as int;
+              final restore = (link['quantity'] as num).toDouble() * qty;
+              final before = (link['current_stock'] as num).toDouble();
+              await txn.rawUpdate('UPDATE inventory SET quantity = quantity + ? WHERE id = ?', [restore, ingredientId]);
+              await DatabaseHelper.logInventoryAudit(
+                db: txn, ingredientId: ingredientId, ingredientName: link['name'] as String?, actionType: 'sale_returned',
+                quantityBefore: before, quantityChange: restore, quantityAfter: before + restore,
+                costPriceAtAction: (link['cost_price'] as num).toDouble(), referenceType: 'invoice', referenceId: id,
+                userId: _currentUser?.id, userName: _currentUser?.name, note: 'LEGACY_FALLBACK',
+              );
+            }
+          }
+        }
+      }
+      
+      return await txn.update('invoices', {'status': 'returned', 'notes': 'تم استرجاع الفاتورة'}, where: 'id = ?', whereArgs: [id]);
+    });
     notifyListeners();
     return result;
   }
 
-  Future<int> deleteExpense(int id, {String? reason}) async {
-    if (!canManageFinance()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.deleteExpenseSafe(
-      id,
-      userId: _currentUser?.id,
-      userName: _currentUser?.name,
-      reason: _normalizeReason(reason),
-    );
+  Future<int> voidInvoice(int id) async {
+    if (!canVoidInvoice()) throw Exception('إلغاء الفواتير متاح للمدير فقط');
+    final result = await _db!.transaction<int>((txn) async {
+      final rows = await txn.query('invoices', where: 'id = ?', whereArgs: [id]);
+      if (rows.isEmpty || rows.first['status'] == 'cancelled' || rows.first['status'] == 'returned') return 0;
+      final items = await txn.query('invoice_items', where: 'invoice_id = ?', whereArgs: [id]);
+      final now = DateTime.now().toIso8601String();
+
+      for (var item in items) {
+        final snapshot = readRecipeSnapshot(item['recipe_snapshot']?.toString());
+        if (snapshot != null) {
+          for (var row in snapshot) {
+            final matId = row['id'] as int;
+            final restore = (row['qty'] as double) * (item['quantity'] as num).toDouble();
+            
+            // Try Materials path
+            final matRows = await txn.query('materials', where: 'id = ?', whereArgs: [matId]);
+            if (matRows.isNotEmpty) {
+              final mat = MaterialModel.fromMap(matRows.first);
+              await txn.rawUpdate('UPDATE materials SET quantity = quantity + ? WHERE id = ?', [restore, matId]);
+              await DatabaseHelper.logInventoryAudit(
+                db: txn, ingredientId: matId, ingredientName: mat.name, actionType: 'sale_cancelled',
+                quantityBefore: mat.quantity, quantityChange: restore, quantityAfter: mat.quantity + restore,
+                costPriceAtAction: mat.costPrice, referenceType: 'invoice', referenceId: id,
+                userId: _currentUser?.id, userName: _currentUser?.name, note: 'HISTORICAL_SNAPSHOT',
+              );
+            } else {
+              // Legacy Fallback
+              final invRows = await txn.query('inventory', where: 'id = ?', whereArgs: [matId]);
+              if (invRows.isNotEmpty) {
+                final oldQty = (invRows.first['quantity'] as num).toDouble();
+                await txn.rawUpdate('UPDATE inventory SET quantity = quantity + ? WHERE id = ?', [restore, matId]);
+                await DatabaseHelper.logInventoryAudit(
+                  db: txn, ingredientId: matId, ingredientName: invRows.first['name'] as String?, actionType: 'sale_cancelled',
+                  quantityBefore: oldQty, quantityChange: restore, quantityAfter: oldQty + restore,
+                  costPriceAtAction: (invRows.first['cost_price'] as num).toDouble(), referenceType: 'invoice', referenceId: id,
+                  userId: _currentUser?.id, userName: _currentUser?.name, note: 'HISTORICAL_SNAPSHOT',
+                );
+              }
+            }
+          }
+        }
+      }
+      
+      return await txn.update('invoices', {'status': 'cancelled', 'notes': 'تم إلغاء الفاتورة'}, where: 'id = ?', whereArgs: [id]);
+    });
     notifyListeners();
     return result;
   }
 
-  // Reports
-    Future<Map<String, dynamic>> getDailyReport(String date) async {
-    _db ??= await DatabaseHelper.database;
-    final invoiceRows = await _db!.rawQuery(
-      "SELECT id, invoice_number, status, created_at, subtotal_amount, discount_amount, total_amount, payment_method FROM invoices WHERE DATE(created_at) = ? AND status NOT IN ('cancelled','returned')",
-      [date],
-    );
-    final itemRows = await _db!.rawQuery(
-      "SELECT invoice_id, product_id, product_name, quantity, price, total, cost_snapshot, unit_profit, total_profit FROM invoice_items WHERE DATE(created_at) = ?",
-      [date],
-    );
-    final expenseResult = await _db!.rawQuery(
-      'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date = ?',
-      [date],
-    );
-    final summary = summarizeInvoices(invoiceRows, itemRows, expensesTotal: (expenseResult.first['total'] as num).toDouble());
-    final agg = aggregateSummary(summary.invoices.values.toList(), expensesTotal: (expenseResult.first['total'] as num).toDouble());
-    final totalExpenses = agg.expenses;
-    // netProfit = discounted gross profit minus expenses (COGS now deducted).
-    return {
-      'totalSales': agg.netRevenue,
-      'invoiceCount': agg.invoiceCount,
-      'totalExpenses': totalExpenses,
-      'netProfit': agg.grossProfitWithFallback - totalExpenses,
-      'grossSales': agg.grossSales,
-      'discountTotal': agg.discountTotal,
-      'cogs': agg.cogs,
-      'cogsFallback': agg.cogsWithFallback,
-      'grossProfit': agg.grossProfitWithFallback,
-    };
+  // Legacy Aliases for Audit Tests
+  Future<int> addIngredient(dynamic ingredientData) async {
+    final ingr = ingredientData as IngredientModel;
+    final now = DateTime.now().toIso8601String();
+    return await _db!.transaction((txn) async {
+      final id = await txn.insert('inventory', {
+        'name': ingr.name,
+        'quantity': ingr.quantity,
+        'unit': ingr.unit,
+        'cost_price': ingr.costPrice,
+        'min_quantity': ingr.minQuantity,
+        'created_at': now,
+        'updated_at': now,
+      });
+      await DatabaseHelper.logInventoryAudit(
+        db: txn,
+        actionType: 'added',
+        ingredientId: id,
+        ingredientName: ingr.name,
+        quantityBefore: 0,
+        quantityChange: ingr.quantity,
+        quantityAfter: ingr.quantity,
+        costPriceAtAction: ingr.costPrice,
+        userId: _currentUser?.id,
+        userName: _currentUser?.name,
+      );
+      return id;
+    });
   }
 
-    Future<Map<String, dynamic>> getMonthlyReport(int year, int month) async {
-    _db ??= await DatabaseHelper.database;
-    final y = '${year}';
-    final m = month.toString().padLeft(2, '0');
-    final invoiceRows = await _db!.rawQuery(
-      "SELECT id, invoice_number, status, created_at, subtotal_amount, discount_amount, total_amount, payment_method FROM invoices WHERE strftime('%Y', created_at) = ? AND strftime('%m', created_at) = ? AND status NOT IN ('cancelled','returned')",
-      [y, m],
-    );
-    final itemRows = await _db!.rawQuery(
-      "SELECT invoice_id, product_id, product_name, quantity, price, total, cost_snapshot, unit_profit, total_profit FROM invoice_items WHERE strftime('%Y', created_at) = ? AND strftime('%m', created_at) = ?",
-      [y, m],
-    );
-    final expenseResult = await _db!.rawQuery(
-      'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE strftime(\'%Y\', date) = ? AND strftime(\'%m\', date) = ?',
-      [y, m],
-    );
-    final summary = summarizeInvoices(invoiceRows, itemRows, expensesTotal: (expenseResult.first['total'] as num).toDouble());
-    final agg = aggregateSummary(summary.invoices.values.toList(), expensesTotal: (expenseResult.first['total'] as num).toDouble());
-    final totalExpenses = agg.expenses;
-    return {
-      'totalSales': agg.netRevenue,
-      'invoiceCount': agg.invoiceCount,
-      'totalExpenses': totalExpenses,
-      'netProfit': agg.grossProfitWithFallback - totalExpenses,
-      'grossSales': agg.grossSales,
-      'discountTotal': agg.discountTotal,
-      'cogs': agg.cogs,
-      'cogsFallback': agg.cogsWithFallback,
-      'grossProfit': agg.grossProfitWithFallback,
-    };
+  Future<int> updateIngredient(dynamic ingredientData) async {
+    final ingr = ingredientData as IngredientModel;
+    final now = DateTime.now().toIso8601String();
+    return await _db!.transaction((txn) async {
+      // Try Materials path first
+      final matRows = await txn.query('materials', where: 'id = ?', whereArgs: [ingr.id]);
+      if (matRows.isNotEmpty) {
+        final oldMat = MaterialModel.fromMap(matRows.first);
+        final qtyDelta = ingr.quantity - oldMat.quantity;
+        final result = await txn.update(
+          'materials',
+          {'name': ingr.name, 'quantity': ingr.quantity, 'unit': ingr.unit, 'cost_price': ingr.costPrice, 'min_quantity': ingr.minQuantity, 'updated_at': now},
+          where: 'id = ?', whereArgs: [ingr.id],
+        );
+        if (qtyDelta != 0) {
+          await DatabaseHelper.logInventoryAudit(
+            db: txn, actionType: 'manual_adjust', ingredientId: ingr.id!, ingredientName: ingr.name,
+            quantityBefore: oldMat.quantity, quantityChange: qtyDelta, quantityAfter: ingr.quantity,
+            costPriceAtAction: ingr.costPrice, userId: _currentUser?.id, userName: _currentUser?.name, note: 'تعديل يدوي',
+          );
+        }
+        return result;
+      }
+      
+      // Legacy Fallback
+      final oldRows = await txn.query('inventory', where: 'id = ?', whereArgs: [ingr.id]);
+      if (oldRows.isEmpty) throw Exception('المادة غير موجودة');
+      final oldQty = (oldRows.first['quantity'] as num).toDouble();
+      final qtyDelta = ingr.quantity - oldQty;
+      final result = await txn.update(
+        'inventory',
+        {'name': ingr.name, 'quantity': ingr.quantity, 'unit': ingr.unit, 'cost_price': ingr.costPrice, 'updated_at': now},
+        where: 'id = ?', whereArgs: [ingr.id],
+      );
+      if (qtyDelta != 0) {
+        await DatabaseHelper.logInventoryAudit(
+          db: txn, actionType: 'manual_adjust', ingredientId: ingr.id!, ingredientName: ingr.name,
+          quantityBefore: oldQty, quantityChange: qtyDelta, quantityAfter: ingr.quantity,
+          costPriceAtAction: ingr.costPrice, userId: _currentUser?.id, userName: _currentUser?.name, note: 'تعديل يدوي',
+        );
+      }
+      return result;
+    });
+  }
+  
+  Future<void> recordPurchase(int materialId, double quantity, double unitCost) async {
+    final now = DateTime.now().toIso8601String();
+    await _db!.transaction((txn) async {
+      // Try Materials path first
+      final matRows = await txn.query('materials', where: 'id = ?', whereArgs: [materialId]);
+      if (matRows.isNotEmpty) {
+        final mat = MaterialModel.fromMap(matRows.first);
+        final newWac = RecipeEngine.calculateWAC(currentQty: mat.quantity, currentAvgCost: mat.costPrice, newQty: quantity, newBatchCost: unitCost);
+        await txn.rawUpdate('UPDATE materials SET quantity = quantity + ?, cost_price = ?, updated_at = ? WHERE id = ?', [quantity, newWac, now, materialId]);
+        await DatabaseHelper.logInventoryAudit(
+          db: txn, actionType: 'purchase', ingredientId: materialId, ingredientName: mat.name,
+          quantityBefore: mat.quantity, quantityChange: quantity, quantityAfter: mat.quantity + quantity,
+          costPriceAtAction: newWac, userId: _currentUser?.id, userName: _currentUser?.name,
+        );
+        return;
+      }
+
+      // Legacy Fallback
+      final invRows = await txn.query('inventory', where: 'id = ?', whereArgs: [materialId]);
+      if (invRows.isEmpty) throw Exception('المادة غير موجودة');
+      final oldQty = (invRows.first['quantity'] as num).toDouble();
+      final oldCost = (invRows.first['cost_price'] as num).toDouble();
+      final newWac = RecipeEngine.calculateWAC(currentQty: oldQty, currentAvgCost: oldCost, newQty: quantity, newBatchCost: unitCost);
+      await txn.rawUpdate('UPDATE inventory SET quantity = quantity + ?, cost_price = ?, updated_at = ? WHERE id = ?', [quantity, newWac, now, materialId]);
+      await DatabaseHelper.logInventoryAudit(
+        db: txn, actionType: 'purchase', ingredientId: materialId, ingredientName: invRows.first['name'] as String?,
+        quantityBefore: oldQty, quantityChange: quantity, quantityAfter: oldQty + quantity,
+        costPriceAtAction: newWac, userId: _currentUser?.id, userName: _currentUser?.name,
+      );
+    });
+    notifyListeners();
   }
 
-  // ==================== SHIFT SUMMARY ====================
-
-  Future<Map<String, dynamic>> getShiftSummary({DateTime? startDate, DateTime? endDate}) async {
-    final start = startDate ?? DateTime.now();
-    final end = endDate ?? DateTime.now();
-    final startStr = start.toIso8601String().substring(0, 10);
-    final endStr = end.toIso8601String().substring(0, 10);
-
-    // Total sales & count
-    final totalResult = await _db!.rawQuery(
-      "SELECT COALESCE(SUM(total_amount), 0) as total, COUNT(*) as count FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')",
-      [startStr, endStr],
-    );
-    final totalSales = (totalResult.first['total'] is num) ? (totalResult.first['total'] as num).toDouble() : 0.0;
-    final invoiceCount = (totalResult.first['count'] is num) ? totalResult.first['count'] as int : 0;
-
-    // Cash
-    final cashResult = await _db!.rawQuery(
-      "SELECT COALESCE(SUM(total_amount), 0) as total FROM invoices WHERE payment_method = ? AND DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')",
-      ['cash', startStr, endStr],
-    );
-    final cashTotal = (cashResult.first['total'] is num) ? (cashResult.first['total'] as num).toDouble() : 0.0;
-
-    // Bank
-    final bankResult = await _db!.rawQuery(
-      "SELECT COALESCE(SUM(total_amount), 0) as total FROM invoices WHERE payment_method = ? AND DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')",
-      ['bank', startStr, endStr],
-    );
-    final bankTotal = (bankResult.first['total'] is num) ? (bankResult.first['total'] as num).toDouble() : 0.0;
-
-    // Card
-    final cardResult = await _db!.rawQuery(
-      "SELECT COALESCE(SUM(total_amount), 0) as total FROM invoices WHERE payment_method = ? AND DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')",
-      ['card', startStr, endStr],
-    );
-    final cardTotal = (cardResult.first['total'] is num) ? (cardResult.first['total'] as num).toDouble() : 0.0;
-
-    // Phase 4.2.1: extend the shift summary with the complete financial layer
-    // (gross sales, discount, COGS, gross profit) by consuming the unified
-    // financial calculator — the exact same primitives used by the Daily,
-    // Monthly and P&L reports, so the Shift report can never diverge.
-    final invoiceRows = await _db!.rawQuery(
-      "SELECT id, invoice_number, status, created_at, subtotal_amount, discount_amount, total_amount, payment_method FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')",
-      [startStr, endStr],
-    );
-    final itemRows = await _db!.rawQuery(
-      'SELECT invoice_id, product_id, product_name, quantity, price, total, cost_snapshot, unit_profit, total_profit FROM invoice_items WHERE DATE(created_at) BETWEEN ? AND ?',
-      [startStr, endStr],
-    );
-    final summary = summarizeInvoices(invoiceRows, itemRows);
-    final agg = aggregateSummary(summary.invoices.values.toList());
-    // COGS: identical historical semantics as the P&L query — frozen
-    // cost_snapshot at time of sale (never recomputed from current costs).
-    final cogsResult = await _db!.rawQuery('''
-      SELECT COALESCE(
-        SUM(
-          CASE WHEN ii.cost_snapshot > 0
-            THEN ii.quantity * ii.cost_snapshot
-            ELSE ii.quantity * (
-              SELECT COALESCE(SUM(pi.quantity * inv.cost_price), 0)
-              FROM product_ingredients pi
-              INNER JOIN inventory inv ON pi.ingredient_id = inv.id
-              WHERE pi.product_id = ii.product_id
-            )
-          END
-        ), 0
-      ) as cogs,
-      COALESCE(SUM(ii.total_profit), 0) as total_profit
-      FROM invoice_items ii
-      INNER JOIN invoices inv_t ON ii.invoice_id = inv_t.id
-      WHERE DATE(inv_t.created_at) BETWEEN ? AND ? AND inv_t.status NOT IN ('cancelled','returned')
-    ''', [startStr, endStr]);
-    final cogs = (cogsResult.first['cogs'] is num) ? (cogsResult.first['cogs'] as num).toDouble() : 0.0;
-    final grossProfitFromSnapshot = (cogsResult.first['total_profit'] is num) ? (cogsResult.first['total_profit'] as num).toDouble() : 0.0;
-    final grossProfit = agg.netRevenue - cogs;
-    return {
-      'totalSales': totalSales,
-      'cashTotal': cashTotal,
-      'bankTotal': bankTotal,
-      'cardTotal': cardTotal,
-      'invoiceCount': invoiceCount,
-      // Phase 4.2.1 financial disclosure (additive only — existing keys unchanged)
-      'grossSales': agg.grossSales,
-      'discountTotal': agg.discountTotal,
-      'cogs': cogs,
-      'grossProfit': grossProfit,
-      'grossProfitFromSnapshot': grossProfitFromSnapshot,
-    };
-  }
-
-  // ==================== PROFIT & LOSS ====================
+  // ==================== REPORTS ====================
 
   Future<Map<String, dynamic>> getProfitAndLossSummary({DateTime? startDate, DateTime? endDate}) async {
     final start = startDate ?? DateTime.now();
     final end = endDate ?? DateTime.now();
-    final startStr = start.toIso8601String().substring(0, 10);
-    final endStr = end.toIso8601String().substring(0, 10);
+    final s = start.toIso8601String().substring(0, 10);
+    final e = end.toIso8601String().substring(0, 10);
 
-    // Total Revenue (net of discount) and gross sales, via the unified financial layer.
-    final invoiceRows = await _db!.rawQuery(
-      "SELECT id, invoice_number, status, created_at, subtotal_amount, discount_amount, total_amount, payment_method FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')",
-      [startStr, endStr],
+    final sales = await _db!.rawQuery(
+      "SELECT SUM(total_amount) as rev, SUM(discount_amount) as disc, COUNT(*) as cnt FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled', 'returned')", [s, e]
     );
-    final itemRows = await _db!.rawQuery(
-      "SELECT invoice_id, product_id, product_name, quantity, price, total, cost_snapshot, unit_profit, total_profit FROM invoice_items WHERE DATE(created_at) BETWEEN ? AND ?",
-      [startStr, endStr],
+    final items = await _db!.rawQuery(
+      "SELECT ii.cost_snapshot, ii.quantity, ii.product_id "
+      "FROM invoice_items ii "
+      "JOIN invoices i ON ii.invoice_id = i.id "
+      "WHERE DATE(i.created_at) BETWEEN ? AND ? "
+      "AND i.status NOT IN ('cancelled', 'returned')", [s, e]
     );
-    final summary = summarizeInvoices(invoiceRows, itemRows);
-    final agg = aggregateSummary(summary.invoices.values.toList());
-    final netRevenue = agg.netRevenue;
-    final grossSales = agg.grossSales;
-    final discountTotal = agg.discountTotal;
-
-    // COGS: based on frozen cost_snapshot at time of sale (historical data never changes)
-    final cogsResult = await _db!.rawQuery('''
-      SELECT COALESCE(
-        SUM(
-          CASE WHEN ii.cost_snapshot > 0
-            THEN ii.quantity * ii.cost_snapshot
-            ELSE ii.quantity * (
-              SELECT COALESCE(SUM(pi.quantity * inv.cost_price), 0)
-              FROM product_ingredients pi
-              INNER JOIN inventory inv ON pi.ingredient_id = inv.id
-              WHERE pi.product_id = ii.product_id
-            )
-          END
-        ), 0
-      ) as cogs,
-      COALESCE(SUM(ii.total_profit), 0) as total_profit
-      FROM invoice_items ii
-      INNER JOIN invoices inv_t ON ii.invoice_id = inv_t.id
-      WHERE DATE(inv_t.created_at) BETWEEN ? AND ? AND inv_t.status NOT IN ('cancelled','returned')
-    ''', [startStr, endStr]);
-    final cogs = (cogsResult.first['cogs'] is num) ? (cogsResult.first['cogs'] as num).toDouble() : 0.0;
-    final grossProfitFromItems = (cogsResult.first['total_profit'] is num) ? (cogsResult.first['total_profit'] as num).toDouble() : 0.0;
-
-    // Gross profit: discount-allocated revenue minus COGS.
-    final grossProfit = netRevenue - cogs;
-    final profitMargin = netRevenue > 0 ? (grossProfit / netRevenue) * 100 : 0.0;
-
-    // Total Expenses
-    final expenseResult = await _db!.rawQuery(
-      'SELECT COALESCE(SUM(amount), 0) as total FROM expenses WHERE date BETWEEN ? AND ?',
-      [startStr, endStr],
+    double totalCogsPnL = 0.0;
+    for (var row in items) {
+      double cost = (row['cost_snapshot'] as num).toDouble();
+      double qty = (row['quantity'] as num).toDouble();
+      if (cost <= 0) {
+        final productId = row['product_id'] as int;
+        final links = await _db!.rawQuery('''
+          SELECT pi.quantity as link_qty, inv.cost_price 
+          FROM product_ingredients pi 
+          INNER JOIN inventory inv ON pi.ingredient_id = inv.id 
+          WHERE pi.product_id = ?
+        ''', [productId]);
+        double calcCost = 0.0;
+        for (var link in links) {
+          calcCost += (link['link_qty'] as num).toDouble() * (link['cost_price'] as num).toDouble();
+        }
+        cost = calcCost;
+      }
+      totalCogsPnL += cost * qty;
+    }
+    final expenses = await _db!.rawQuery(
+      "SELECT SUM(amount) as total FROM expenses WHERE date BETWEEN ? AND ?", [s, e]
     );
-    final totalExpenses = (expenseResult.first['total'] is num) ? (expenseResult.first['total'] as num).toDouble() : 0.0;
-
-    final netProfit = grossProfit - totalExpenses;
-
-    return {
-      'totalRevenue': netRevenue,
-      'grossSales': grossSales,
-      'discountTotal': discountTotal,
-      'cogs': cogs,
-      'cogsFallback': agg.cogsWithFallback,
-      'grossProfit': grossProfit,
-      'grossProfitFromSnapshot': grossProfitFromItems,
-      'profitMargin': profitMargin,
-      'totalExpenses': totalExpenses,
-      'netProfit': grossProfit - totalExpenses,
-    };
-  }
-
-  // ==================== DASHBOARD (read-only analytics queries) ====================
-
-  /// Daily sales series, grouped by DATE(created_at).
-  Future<List<Map<String, dynamic>>> getDashboardDailySales({required DateTime start, required DateTime end}) async {
-    _db ??= await DatabaseHelper.database;
-    final startStr = '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
-    final endStr = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
-    final result = await _db!.rawQuery(
-      'SELECT DATE(created_at) as d, COALESCE(SUM(total_amount),0) as total, COUNT(*) as count '
-      "FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned') GROUP BY DATE(created_at) ORDER BY d ASC",
-      [startStr, endStr],
-    );
-    return result;
-  }
-
-  /// Daily net revenue series computed by the unified financial layer (net of discount).
-  Future<List<Map<String, dynamic>>> getDashboardDailyNetSales({required DateTime start, required DateTime end}) async {
-    _db ??= await DatabaseHelper.database;
-    final startStr = '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
-    final endStr = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
-    final result = await _db!.rawQuery(
-      'SELECT DATE(created_at) as d, COALESCE(SUM(total_amount),0) as total, COALESCE(SUM(subtotal_amount),0) as gross, COALESCE(SUM(discount_amount),0) as discount, COUNT(*) as count '
-      "FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned') GROUP BY DATE(created_at) ORDER BY d ASC",
-      [startStr, endStr],
-    );
-    return result;
-  }
-
-  /// Top N best-selling products by quantity sold.
-  Future<List<Map<String, dynamic>>> getTopProductsByQuantity({required DateTime start, required DateTime end, int limit = 5}) async {
-    _db ??= await DatabaseHelper.database;
-    final startStr = '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
-    final endStr = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
-    return await _db!.rawQuery(
-      'SELECT product_name, SUM(quantity) as qty, COALESCE(SUM(total),0) as total '
-      "FROM invoice_items ii INNER JOIN invoices inv ON inv.id = ii.invoice_id WHERE DATE(ii.created_at) BETWEEN ? AND ? AND inv.status NOT IN ('cancelled','returned') "
-      'GROUP BY product_id ORDER BY qty DESC LIMIT ?',
-      [startStr, endStr, limit],
-    );
-  }
-
-  /// Top N most profitable products with the discount allocated pro rata via the unified layer.
-  Future<List<Map<String, dynamic>>> getTopProductsByProfit({required DateTime start, required DateTime end, int limit = 5}) async {
-    _db ??= await DatabaseHelper.database;
-    final startStr = '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
-    final endStr = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
-    final invoiceRows = await _db!.rawQuery(
-      "SELECT id, invoice_number, status, created_at, subtotal_amount, discount_amount, total_amount, payment_method FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')",
-      [startStr, endStr],
-    );
-    final itemRows = await _db!.rawQuery(
-      "SELECT invoice_id, product_id, product_name, quantity, price, total, cost_snapshot, unit_profit, total_profit FROM invoice_items WHERE DATE(created_at) BETWEEN ? AND ?",
-      [startStr, endStr],
-    );
-    final summary = summarizeInvoices(invoiceRows, itemRows);
-    return topProductsByDiscountedProfit(summary.invoices.values.toList(), limit: limit)
-      .map((m) => <String, dynamic>{'product_name': m['product_name'], 'qty': m['qty'], 'profit': m['discountedProfit']})
-      .toList();
-  }
-
-  /// Total expenses in the period, grouped by expense name (reuse Expense.name as category).
-  Future<List<Map<String, dynamic>>> getExpenseSummary({required DateTime start, required DateTime end}) async {
-    _db ??= await DatabaseHelper.database;
-    final startStr = '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
-    final endStr = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
-    final result = await _db!.rawQuery(
-      'SELECT name, COALESCE(SUM(amount),0) as amount FROM expenses WHERE date BETWEEN ? AND ? '
-      'GROUP BY name ORDER BY amount DESC',
-      [startStr, endStr],
-    );
-    return result;
-  }
-
-  /// Count of ingredients below their min_quantity (reuse existing logic).
-  Future<int> getLowStockCount() async {
-    final list = await getLowStockIngredients();
-    return list.length;
-  }
-
-
-  // ==================== BUSINESS INTELLIGENCE ====================
-
-  Future<Map<String, dynamic>> getBusinessIntelligence({
-    required DateTime start,
-    required DateTime end,
-  }) async {
-    if (!canManageFinance()) throw Exception('هذه البيانات متاحة للمدير فقط');
-    _db ??= await DatabaseHelper.database;
-    final s = '${start.year}-${start.month.toString().padLeft(2, '0')}-${start.day.toString().padLeft(2, '0')}';
-    final e = '${end.year}-${end.month.toString().padLeft(2, '0')}-${end.day.toString().padLeft(2, '0')}';
-
-    final sales = await _db!.rawQuery('''
-      SELECT COALESCE(SUM(total_amount),0) AS sales,
-             COALESCE(SUM(subtotal_amount),0) AS subtotal,
-             COALESCE(SUM(discount_amount),0) AS discounts,
-             COUNT(*) AS invoices,
-             COALESCE(SUM(CASE WHEN payment_method='cash' THEN total_amount ELSE 0 END),0) AS cash,
-             COALESCE(SUM(CASE WHEN payment_method='card' THEN total_amount ELSE 0 END),0) AS card,
-             COALESCE(SUM(CASE WHEN payment_method='bank' THEN total_amount ELSE 0 END),0) AS transfer
-      FROM invoices
-      WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')
-    ''', [s, e]);
-
-    final invoiceRows = await _db!.rawQuery('''
-      SELECT id, invoice_number, status, created_at, subtotal_amount, discount_amount, total_amount, payment_method
-      FROM invoices
-      WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')
-    ''', [s, e]);
-
-    final itemRows = await _db!.rawQuery('''
-      SELECT invoice_id, product_id, product_name, quantity, price, total, cost_snapshot, unit_profit, total_profit
-      FROM invoice_items
-      WHERE DATE(created_at) BETWEEN ? AND ?
-    ''', [s, e]);
-
-    final expensesResult = await _db!.rawQuery(
-      'SELECT COALESCE(SUM(amount),0) AS total FROM expenses WHERE date BETWEEN ? AND ?',
-      [s, e],
+    
+    final payments = await _db!.rawQuery(
+      "SELECT payment_method, SUM(total_amount) as total "
+      "FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? "
+      "AND status NOT IN ('cancelled', 'returned') "
+      "GROUP BY payment_method", [s, e]
     );
 
-    final summary = summarizeInvoices(invoiceRows, itemRows);
-    final totalExpenses = (expensesResult.first['total'] as num?)?.toDouble() ?? 0;
-    // Phase 5.1.1 (BI-F-01): reuse the payment split columns already
-    // computed by the sales query above — never leave cashTotal/cardTotal/
-    // bankTotal at the aggregateSummary default of zero.
-    final salesRow = sales.first;
-    final paymentSplits = <String, double>{
-      'cash': (salesRow['cash'] as num).toDouble(),
-      'card': (salesRow['card'] as num).toDouble(),
-      'bank': (salesRow['transfer'] as num).toDouble(),
-    };
-    final agg = aggregateSummary(summary.invoices.values.toList(),
-        expensesTotal: totalExpenses, paymentSplits: paymentSplits);
+    final rev = (sales.first['rev'] as num?)?.toDouble() ?? 0.0;
+    final disc = (sales.first['disc'] as num?)?.toDouble() ?? 0.0;
+    final cnt = (sales.first['cnt'] as num?)?.toInt() ?? 0;
+    final cogs = totalCogsPnL;
+    final ex = (expenses.first['total'] as num?)?.toDouble() ?? 0.0;
 
-    final grossProfit = agg.grossProfitWithFallback;
-
-    final hourly = await _db!.rawQuery('''
-      SELECT CAST(strftime('%H', created_at) AS INTEGER) AS hour,
-             COUNT(*) AS orders, COALESCE(SUM(total_amount),0) AS sales
-      FROM invoices
-      WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled','returned')
-      GROUP BY CAST(strftime('%H', created_at) AS INTEGER)
-      ORDER BY sales DESC
-    ''', [s, e]);
-
-    final payment = [
-      {'name': 'نقدًا', 'amount': agg.cashTotal},
-      {'name': 'بطاقة', 'amount': agg.cardTotal},
-      {'name': 'تحويل', 'amount': agg.bankTotal},
-    ];
-
-    final customers = await _db!.rawQuery('''
-      SELECT c.name, c.phone, COUNT(i.id) AS visits,
-             COALESCE(SUM(i.total_amount),0) AS spent
-      FROM customers c INNER JOIN invoices i ON i.customer_id = c.id
-      WHERE DATE(i.created_at) BETWEEN ? AND ? AND i.status NOT IN ('cancelled','returned')
-      GROUP BY c.id ORDER BY spent DESC LIMIT 8
-    ''', [s, e]);
-
-    final lowStock = await _db!.rawQuery('''
-      SELECT id, name, quantity, unit, min_quantity, cost_price
-      FROM inventory WHERE quantity <= min_quantity
-      ORDER BY (min_quantity - quantity) DESC, name ASC LIMIT 12
-    ''');
-
-    final salesValue = (sales.first['sales'] as num?)?.toDouble() ?? 0;
-    final invoiceCount = (sales.first['invoices'] as num?)?.toInt() ?? 0;
-
-    return {
-      'sales': agg.netRevenue,
-      'subtotal': agg.grossSales,
-      'discounts': agg.discountTotal,
-      'invoices': invoiceCount,
-      'averageTicket': invoiceCount == 0 ? 0.0 : agg.netRevenue / invoiceCount,
-      'grossProfit': grossProfit,
-      'expenses': totalExpenses,
-      'netProfit': agg.netProfitWithFallback,
-      'margin': agg.netRevenue == 0 ? 0.0 : (grossProfit / agg.netRevenue) * 100,
-      'cogs': agg.cogsWithFallback,
-      'payment': payment,
-      'hourly': hourly,
-      'customers': customers,
-      'lowStock': lowStock,
-    };
-  }
-
-  // Navigation
-  void setIndex(int index) {
-    _currentIndex = index;
-    notifyListeners();
-  }
-
-  // ==================== INVENTORY CRUD ====================
-
-  Future<int> addIngredient(IngredientModel ingredient) async {
-    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.insertIngredient(ingredient.toMap());
-    // Audit trail: log the new ingredient creation
-    await DatabaseHelper.logInventoryAudit(
-      actionType: 'added',
-      ingredientId: result,
-      ingredientName: ingredient.name,
-      quantityBefore: 0,
-      quantityChange: ingredient.quantity,
-      quantityAfter: ingredient.quantity,
-      costPriceAtAction: ingredient.costPrice,
-      referenceType: 'ingredient',
-      referenceId: result,
-      // Phase 4.6.1 (NEW-F-01): executor attribution.
-      userId: _currentUser?.id,
-      userName: _currentUser?.name,
-    );
-    notifyListeners();
-    return result;
-  }
-
-  Future<List<IngredientModel>> getIngredients() async {
-    final results = await DatabaseHelper.getIngredients();
-    return results.map((e) => IngredientModel.fromMap(e)).toList();
-  }
-
-  Future<List<IngredientModel>> getLowStockIngredients() async {
-    final results = await DatabaseHelper.getLowStockIngredients();
-    return results.map((e) => IngredientModel.fromMap(e)).toList();
-  }
-
-  Future<int> updateIngredient(IngredientModel ingredient) async {
-    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    // Audit trail: log quantity and/or price changes before applying them
-    final old = await DatabaseHelper.getIngredientById(ingredient.id!);
-    if (old.isNotEmpty) {
-      final oldQty = (old.first['quantity'] as num).toDouble();
-      final oldCost = (old.first['cost_price'] as num).toDouble();
-      final newQty = ingredient.quantity;
-      final newCost = ingredient.costPrice;
-      final qtyDelta = newQty - oldQty;
-      if (qtyDelta != 0 || newCost != oldCost) {
-        await DatabaseHelper.logInventoryAudit(
-          actionType: qtyDelta != 0 ? 'manual_adjust' : 'price_changed',
-          ingredientId: ingredient.id!,
-          ingredientName: ingredient.name,
-          quantityBefore: oldQty,
-          quantityChange: qtyDelta,
-          quantityAfter: newQty,
-          costPriceAtAction: newCost,
-          referenceType: 'ingredient',
-          referenceId: ingredient.id,
-          // Phase 4.6.1 (NEW-F-01): executor attribution.
-          userId: _currentUser?.id,
-          userName: _currentUser?.name,
-        );
+    final payMap = <String, double>{'cash': 0.0, 'card': 0.0, 'transfer': 0.0};
+    for (final p in payments) {
+      String method = p['payment_method'] as String;
+      if (method == 'bank') method = 'transfer';
+      if (payMap.containsKey(method)) {
+        payMap[method] = (payMap[method] ?? 0.0) + ((p['total'] as num?)?.toDouble() ?? 0.0);
       }
     }
-    final result = await DatabaseHelper.updateIngredient(ingredient.id!, {
-      'name': ingredient.name,
-      'quantity': ingredient.quantity,
-      'unit': ingredient.unit,
-      'min_quantity': ingredient.minQuantity,
-      'cost_price': ingredient.costPrice,
-      'updated_at': DateTime.now().toIso8601String(),
-    });
+
+    return {
+      'totalRevenue': rev,
+      'totalSales': rev,
+      'sales': rev,
+      'subtotal': rev + disc,
+      'discounts': disc,
+      'grossSales': rev + disc,
+      'discountTotal': disc,
+      'cogs': cogs,
+      'grossProfit': rev - cogs,
+      'totalExpenses': ex,
+      'expenses': ex,
+      'netProfit': rev - cogs - ex,
+      'invoices': cnt,
+      'invoiceCount': cnt,
+      'payment': [
+        {'name': 'نقدًا', 'amount': payMap['cash']},
+        {'name': 'بطاقة', 'amount': payMap['card']},
+        {'name': 'تحويل', 'amount': payMap['transfer']},
+      ],
+    };
+  }
+
+  Future<Map<String, dynamic>> getDailyReport(String date) async => getProfitAndLossSummary(startDate: DateTime.parse(date), endDate: DateTime.parse(date));
+  Future<Map<String, dynamic>> getBusinessIntelligence({required DateTime start, required DateTime end}) async => getProfitAndLossSummary(startDate: start, endDate: end);
+
+  Future<int> addExpense(Expense expense) async {
+    final data = expense.toMap();
+    data['created_at'] ??= DateTime.now().toIso8601String();
+    final id = await _db!.insert('expenses', data);
     notifyListeners();
-    // Auto recalculate costs of products affected by this ingredient's price change
-    await updateAffectedProductsCost(ingredient.id!);
+    return id;
+  }
+
+  Future<int> deleteExpense(int id, {String? reason}) async {
+    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
+    final result = await DatabaseHelper.deleteExpenseSafe(id, userId: _currentUser?.id, userName: _currentUser?.name, reason: reason);
+    notifyListeners();
     return result;
   }
 
-  /// Phase 4.1: safe-by-default ingredient deletion. Blocks on purchase
-  /// history and recipe links by default; `force` is the explicit override
-  /// (the UI must already have shown the impact preview).
+  Future<Map<String, dynamic>> getShiftSummary({DateTime? startDate, DateTime? endDate}) async {
+    final start = startDate ?? DateTime.now();
+    final end = endDate ?? DateTime.now();
+    final s = start.toIso8601String().substring(0, 10);
+    final e = end.toIso8601String().substring(0, 10);
+    
+    final sales = await _db!.rawQuery(
+      "SELECT SUM(total_amount) as total, SUM(discount_amount) as disc, COUNT(*) as cnt FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? AND status NOT IN ('cancelled', 'returned')", [s, e]
+    );
+    final items = await _db!.rawQuery(
+      "SELECT ii.cost_snapshot, ii.quantity, ii.product_id "
+      "FROM invoice_items ii "
+      "JOIN invoices i ON ii.invoice_id = i.id "
+      "WHERE DATE(i.created_at) BETWEEN ? AND ? "
+      "AND i.status NOT IN ('cancelled', 'returned')", [s, e]
+    );
+    double totalCogsShift = 0.0;
+    for (var row in items) {
+      double cost = (row['cost_snapshot'] as num).toDouble();
+      double qty = (row['quantity'] as num).toDouble();
+      if (cost <= 0) {
+        final productId = row['product_id'] as int;
+        final links = await _db!.rawQuery('''
+          SELECT pi.quantity as link_qty, inv.cost_price 
+          FROM product_ingredients pi 
+          INNER JOIN inventory inv ON pi.ingredient_id = inv.id 
+          WHERE pi.product_id = ?
+        ''', [productId]);
+        double calcCost = 0.0;
+        for (var link in links) {
+          calcCost += (link['link_qty'] as num).toDouble() * (link['cost_price'] as num).toDouble();
+        }
+        cost = calcCost;
+      }
+      totalCogsShift += cost * qty;
+    }
+    final expenses = await _db!.rawQuery(
+      "SELECT SUM(amount) as total FROM expenses WHERE DATE(created_at) BETWEEN ? AND ?", [s, e]
+    );
+    final payments = await _db!.rawQuery(
+      "SELECT payment_method, SUM(total_amount) as total "
+      "FROM invoices WHERE DATE(created_at) BETWEEN ? AND ? "
+      "AND status NOT IN ('cancelled', 'returned') "
+      "GROUP BY payment_method", [s, e]
+    );
+    
+    final rev = (sales.first['total'] as num?)?.toDouble() ?? 0.0;
+    final disc = (sales.first['disc'] as num?)?.toDouble() ?? 0.0;
+    final cnt = (sales.first['cnt'] as num?)?.toInt() ?? 0;
+    final cogs = totalCogsShift;
+    final ex = (expenses.first['total'] as num?)?.toDouble() ?? 0.0;
+    
+    final payMap = <String, double>{'cash': 0.0, 'card': 0.0, 'transfer': 0.0};
+    for (final p in payments) {
+      String method = p['payment_method'] as String;
+      if (method == 'bank') method = 'transfer';
+      if (payMap.containsKey(method)) {
+        payMap[method] = (payMap[method] ?? 0.0) + ((p['total'] as num?)?.toDouble() ?? 0.0);
+      }
+    }
+    
+    return {
+      'grossSales': rev + disc,
+      'discountTotal': disc,
+      'totalSales': rev,
+      'cogs': cogs,
+      'grossProfit': rev - cogs,
+      'totalExpenses': ex,
+      'netProfit': rev - cogs - ex,
+      'invoiceCount': cnt,
+      'cashTotal': payMap['cash'] ?? 0.0,
+      'bankTotal': payMap['transfer'] ?? 0.0,
+      'cardTotal': payMap['card'] ?? 0.0,
+      'payment': [
+        {'name': 'نقدًا', 'amount': payMap['cash']},
+        {'name': 'بطاقة', 'amount': payMap['card']},
+        {'name': 'تحويل', 'amount': payMap['transfer']},
+      ],
+    };
+  }
+
+  // More Legacy Aliases
+  Future<Map<String, dynamic>> getIngredientImpact(int id) async {
+    final impact = await DatabaseHelper.getMaterialImpact(id);
+    return {
+      ...impact,
+      'purchase_reference_count': impact['purchase_count'], // Test compatibility
+    };
+  }
+
   Future<int> deleteIngredient(int id, {bool force = false, String? reason}) async {
     if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.deleteIngredientSafe(
+    final r = await DatabaseHelper.deleteIngredientSafe(
       id,
       force: force,
       userId: _currentUser?.id,
       userName: _currentUser?.name,
-      reason: _normalizeReason(reason),
+      reason: reason,
     );
     notifyListeners();
-    return result;
+    return r;
   }
+  Future<int> deleteSupplier(int id, {String? reason}) => DatabaseHelper.deleteSupplierSafe(id, userId: _currentUser?.id, userName: _currentUser?.name, reason: reason);
 
-  /// Read-only impact detection for the UI impact-preview dialog (R-01).
-  Future<Map<String, dynamic>> getIngredientImpact(int id) async {
-    return await DatabaseHelper.getIngredientImpact(id);
-  }
-
-  Future<void> recordPurchase(int ingredientId, double quantity, double cost) async {
-    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final ingredient = await DatabaseHelper.getIngredientById(ingredientId);
-    if (ingredient.isNotEmpty) {
-      final oldQty = (ingredient.first['quantity'] as num).toDouble();
-      final oldCost = (ingredient.first['cost_price'] as num).toDouble();
-      
-      double newCost = oldCost;
-      if (cost > 0) {
-        newCost = (oldQty * oldCost + quantity * cost) / (oldQty + quantity);
-      }
-      
-      final ingredientName = ingredient.first['name'] as String?;
-      await DatabaseHelper.updateIngredient(ingredientId, {
-        'quantity': oldQty + quantity,
-        'cost_price': newCost,
-      });
-      // Audit trail: log the purchase movement (increase in stock)
-      await DatabaseHelper.logInventoryAudit(
-        actionType: 'purchase',
-        ingredientId: ingredientId,
-        ingredientName: ingredientName,
-        quantityBefore: oldQty,
-        quantityChange: quantity,
-        quantityAfter: oldQty + quantity,
-        costPriceAtAction: newCost,
-        referenceType: 'purchase',
-        referenceId: null,
-        // Phase 4.6.1 (NEW-F-01): executor attribution.
-        userId: _currentUser?.id,
-        userName: _currentUser?.name,
-      );
-      notifyListeners();
-      // Auto recalculate costs of products affected by this ingredient's price change
-      await updateAffectedProductsCost(ingredientId);
-    }
-  }
-
-  // ==================== SUPPLIERS CRUD ====================
-
-  Future<int> addSupplier(Supplier supplier) async {
-    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.insertSupplier({
-      'name': supplier.name,
-      'phone': supplier.phone,
-      'address': supplier.address,
-      'notes': supplier.notes,
-      'balance': supplier.balance,
-      'created_at': supplier.createdAt ?? DateTime.now().toIso8601String(),
-      'updated_at': supplier.updatedAt ?? DateTime.now().toIso8601String(),
-    });
-    notifyListeners();
-    return result;
-  }
-
-  Future<List<Supplier>> getSuppliers() async {
-    final results = await DatabaseHelper.getSuppliers();
-    return results.map((e) => Supplier.fromMap(e)).toList();
-  }
-
-  Future<Supplier?> getSupplierById(int id) async {
-    final result = await DatabaseHelper.getSupplierById(id);
-    return result != null ? Supplier.fromMap(result) : null;
-  }
-
-  Future<int> updateSupplier(Supplier supplier) async {
-    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.updateSupplier(supplier.id!, {
-      'name': supplier.name,
-      'phone': supplier.phone,
-      'address': supplier.address,
-      'notes': supplier.notes,
-      'balance': supplier.balance,
-      'updated_at': DateTime.now().toIso8601String(),
-    });
-    notifyListeners();
-    return result;
-  }
-
-  /// Phase 4.1: supplier deletion blocks permanently when financial payment
-  /// records exist (L-2). Payment history is never erased, silently or not.
-  Future<int> deleteSupplier(int id, {String? reason}) async {
-    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.deleteSupplierSafe(
-      id,
-      userId: _currentUser?.id,
-      userName: _currentUser?.name,
-      reason: _normalizeReason(reason),
-    );
-    notifyListeners();
-    return result;
-  }
-
-  // ==================== PURCHASES ====================
-
-  Future<int> createPurchaseInvoice(PurchaseInvoice invoice, List<PurchaseItem> items) async {
-    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    // Phase 4.6.1 (NEW-F-01): executor attribution for the purchase movement audit rows.
-    final result = await DatabaseHelper.insertPurchaseInvoice(
-      invoice.toMap(),
-      items.map((e) => e.toMap()).toList(),
-      userId: _currentUser?.id,
-      userName: _currentUser?.name,
-    );
-    // Auto recalculate costs of products affected by purchased ingredients' new cost_price
-    final uniqueIngredients = items.map((e) => e.ingredientId).toSet();
-    for (final ingredientId in uniqueIngredients) {
-      await updateAffectedProductsCost(ingredientId);
-    }
-    notifyListeners();
-    return result;
-  }
-
-  Future<List<PurchaseInvoice>> getPurchaseInvoices({int? supplierId}) async {
-    final results = await DatabaseHelper.getPurchaseInvoices(supplierId: supplierId);
-    return results.map((e) => PurchaseInvoice.fromMap(e)).toList();
-  }
-
-  Future<List<PurchaseItem>> getPurchaseItems(int invoiceId) async {
-    final results = await DatabaseHelper.getPurchaseItems(invoiceId);
-    return results.map((e) => PurchaseItem.fromMap(e)).toList();
-  }
-
-  // ==================== PAYMENTS & LEDGER ====================
-
-  Future<int> addSupplierPayment(SupplierPayment payment) async {
-    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.insertSupplierPayment(
-      payment.toMap(),
-      userId: _currentUser?.id,
-      userName: _currentUser?.name,
-    );
-    notifyListeners();
-    return result;
-  }
-
-  Future<List<Map<String, dynamic>>> getSupplierLedger(int supplierId) async {
-    return await DatabaseHelper.getSupplierLedger(supplierId);
-  }
-
-  /// Centralized recalculation: update cost of products affected by an ingredient price change only
-  Future<void> updateAffectedProductsCost(int ingredientId) async {
-    final affectedProductIds = await DatabaseHelper.getProductIdsByIngredient(ingredientId);
-    for (final productId in affectedProductIds) {
-      await updateProductCostFromRecipe(productId, notify: false);
-    }
-    // Callers notify once after the complete recalculation batch finishes.
-  }
-
-  // ==================== RECIPE MANAGEMENT ====================
-
-  Future<double> calculateProductCost(int productId) async {
-    final ingredients = await DatabaseHelper.getProductIngredients(productId);
-    return ingredients.fold<double>(
-      0,
-      (total, item) => total +
-          (item['quantity'] as num).toDouble() *
-          ((item['cost_price'] as num?)?.toDouble() ?? 0),
-    );
-  }
-
-  Future<void> updateProductCostFromRecipe(int productId, {bool notify = true}) async {
-    final newCost = await calculateProductCost(productId);
-    await _db!.rawUpdate(
-      'UPDATE products SET cost = ?, updated_at = ? WHERE id = ?',
-      [newCost, DateTime.now().toIso8601String(), productId],
-    );
-    if (notify) notifyListeners();
-  }
-
-  Future<int> addProductIngredient(ProductIngredient link) async {
-    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    if (link.quantity <= 0) {
-      throw ArgumentError('كمية الوصفة يجب أن تكون أكبر من صفر');
-    }
-    final result = await DatabaseHelper.insertProductIngredient(link.toMap());
-    await updateProductCostFromRecipe(link.productId);
-    return result;
-  }
-
-  Future<List<Map<String, dynamic>>> getProductIngredients(int productId) async {
-    return await DatabaseHelper.getProductIngredients(productId);
-  }
-
-  Future<int> deleteProductIngredient(int productId, int ingredientId, {String? reason}) async {
-    if (!canManageCatalog()) throw Exception('هذه العملية متاحة للمدير فقط');
-    final result = await DatabaseHelper.deleteProductIngredientSafe(
-      productId,
-      ingredientId,
-      userId: _currentUser?.id,
-      userName: _currentUser?.name,
-      reason: _normalizeReason(reason),
-    );
-    await updateProductCostFromRecipe(productId);
-    return result;
-  }
-
-  /// Phase 4.3.1.1 (F-01): a deletion reason is written to the audit log ONLY
-  /// when the caller provides a real (non-whitespace) reason. Never fabricates
-  /// an audit entry — an empty or missing reason leaves the note without the
-  /// `deletion_reason` key.
-  static String? _normalizeReason(String? reason) {
-    final trimmed = reason?.trim();
-    if (trimmed == null || trimmed.isEmpty) return null;
-    return trimmed;
-  }
 }

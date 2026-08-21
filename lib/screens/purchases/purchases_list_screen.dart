@@ -165,8 +165,8 @@ class _PurchasesListScreenState extends State<PurchasesListScreen> {
                       itemBuilder: (context, i) {
                         final item = items[i];
                         return ListTile(
-                          title: Text(item.ingredientName ?? 'صنف'),
-                          subtitle: Text('الكمية: ${item.quantity} | السعر: ${item.unitCost}'),
+	                          title: Text(item.materialName ?? 'صنف'),
+	                          subtitle: Text('الكمية: ${item.quantity} ${item.unit ?? ''} | السعر: ${item.unitCost}'),
                           trailing: Text('${item.totalCost.toStringAsFixed(2)} ج.س', style: const TextStyle(fontWeight: FontWeight.bold)),
                         );
                       },

@@ -111,8 +111,8 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
                         return Card(
                           margin: const EdgeInsets.only(bottom: 8),
                           child: ListTile(
-                            title: Text(item.ingredientName ?? 'صنف', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text('الكمية: ${item.quantity} | السعر: ${item.unitCost}'),
+	                            title: Text(item.materialName ?? 'صنف', style: const TextStyle(fontWeight: FontWeight.bold)),
+	                            subtitle: Text('الكمية: ${item.quantity} ${item.unit ?? ''} | السعر: ${item.unitCost}'),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -219,26 +219,27 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
   }
 
   void _showAddItemDialog(BuildContext context) {
-    IngredientModel? selectedIng;
+    MaterialModel? selectedMat;
     final qtyController = TextEditingController();
     final costController = TextEditingController();
 
     showDialog(
+      useRootNavigator: true,
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('إضافة صنف للفاتورة'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            FutureBuilder<List<IngredientModel>>(
-              future: context.read<AppProvider>().getIngredients(),
+            FutureBuilder<List<MaterialModel>>(
+              future: context.read<AppProvider>().getMaterials(),
               builder: (context, snapshot) {
-                final ingredients = snapshot.data ?? [];
-                return DropdownButtonFormField<IngredientModel>(
+                final materials = (snapshot.data ?? []).where((m) => !m.isPrepared).toList();
+                return DropdownButtonFormField<MaterialModel>(
                   decoration: const InputDecoration(labelText: 'المادة الخام *'),
-                  items: ingredients.map((i) => DropdownMenuItem(value: i, child: Text(i.name))).toList(),
+                  items: materials.map((i) => DropdownMenuItem(value: i, child: Text(i.name))).toList(),
                   onChanged: (val) {
-                    selectedIng = val;
+                    selectedMat = val;
                     costController.text = val?.costPrice.toString() ?? '';
                   },
                 );
@@ -262,15 +263,16 @@ class _NewPurchaseScreenState extends State<NewPurchaseScreen> {
             onPressed: () {
               final qty = double.tryParse(qtyController.text) ?? 0;
               final cost = double.tryParse(costController.text) ?? 0;
-              if (selectedIng == null || qty <= 0 || cost <= 0) return;
+              if (selectedMat == null || qty <= 0 || cost <= 0) return;
               
               setState(() {
                 _items.add(PurchaseItem(
-                  ingredientId: selectedIng!.id!,
-                  ingredientName: selectedIng!.name,
+                  materialId: selectedMat!.id!,
+                  materialName: selectedMat!.name,
                   quantity: qty,
                   unitCost: cost,
                   totalCost: qty * cost,
+                  unit: selectedMat!.unit,
                 ));
               });
               Navigator.pop(context);

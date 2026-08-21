@@ -1,0 +1,798 @@
+00:00 +0: loading /tmp/hotburger_target/test/audit_actor_attribution_test.dart                                                                                                                         00:01 +0: loading /tmp/hotburger_target/test/audit_actor_attribution_test.dart                                                                                                                         00:02 +0: loading /tmp/hotburger_target/test/audit_actor_attribution_test.dart                                                                                                                         00:02 +0: /tmp/hotburger_target/test/audit_actor_attribution_test.dart: currentUser identity matches the expected test actor                                                                           00:02 +1: /tmp/hotburger_target/test/audit_actor_attribution_test.dart: currentUser identity matches the expected test actor                                                                           00:02 +1: /tmp/hotburger_target/test/audit_actor_attribution_test.dart: createInvoice (sale deduction) every deducted ingredient row carries the executor identity                                     00:02 +2: /tmp/hotburger_target/test/audit_actor_attribution_test.dart: createInvoice (sale deduction) every deducted ingredient row carries the executor identity                                     00:02 +2: /tmp/hotburger_target/test/audit_actor_attribution_test.dart: createInvoice (sale deduction) quantities are exact — attribution never changes the math                                       00:02 +3: /tmp/hotburger_target/test/audit_actor_attribution_test.dart: createInvoice (sale deduction) quantities are exact — attribution never changes the math                                       00:02 +3: /tmp/hotburger_target/test/audit_actor_attribution_test.dart: returnInvoice (sale_returned restoration) restoration rows carry the executor and preserve the snapshot note                   00:03 +3: /tmp/hotburger_target/test/audit_actor_attribution_test.dart: returnInvoice (sale_returned restoration) restoration rows carry the executor and preserve the snapshot note                   00:03 +4: /tmp/hotburger_target/test/audit_actor_attribution_test.dart: returnInvoice (sale_returned restoration) restoration rows carry the executor and preserve the snapshot note                   00:03 +4: /tmp/hotburger_target/test/audit_actor_attribution_test.dart: voidInvoice (sale_cancelled restoration) cancellation rows carry the executor identity                                         00:03 +5: /tmp/hotburger_target/test/backup_restore_test.dart: validateBackupFile rejects a missing file with a clear reason                                                                           00:03 +6 -1: /tmp/hotburger_target/test/backup_restore_test.dart: validateBackupFile rejects a missing file with a clear reason                                                                        00:03 +6 -1: /tmp/hotburger_target/test/backup_restore_test.dart: validateBackupFile rejects an empty file                                                                                             00:03 +6 ~1 -1: /tmp/hotburger_target/test/backup_restore_test.dart: validateBackupFile rejects an empty file                                                                                          00:03 +7 ~1 -1: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 1 — cash-only invoice: cashTotal>0, card/bank = 0                                         00:03 +7 ~1 -1: /tmp/hotburger_target/test/audit_actor_attribution_test.dart: legacy fallback keeps the diagnostic AND adds the actor [E]                                                              
+  Expected: non-empty
+    Actual: WhereIterable<Map<String, Object?>>:[]
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 480:18  expect
+  test/audit_actor_attribution_test.dart 189:5        main.<fn>
+  
+00:03 +8 ~1 -1: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 1 — cash-only invoice: cashTotal>0, card/bank = 0                                         
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/audit_actor_attribution_test.dart -p vm --plain-name 'legacy fallback keeps the diagnostic AND adds the actor'
+00:03 +9 ~1 -1: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 1 — cash-only invoice: cashTotal>0, card/bank = 0                                         00:03 +10 ~1 -1: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 1 — cash-only invoice: cashTotal>0, card/bank = 0                                        00:03 +11 ~1 -1: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 1 — cash-only invoice: cashTotal>0, card/bank = 0                                        00:03 +12 ~1 -1: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 1 — cash-only invoice: cashTotal>0, card/bank = 0                                        00:03 +13 ~1 -1: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 1 — cash-only invoice: cashTotal>0, card/bank = 0                                        00:03 +14 ~1 -1: /tmp/hotburger_target/test/backup_restore_test.dart: validateBackupFile accepts a fresh HOT BURGER database (exported from the live app)                                              00:03 +14 ~1 -1: /tmp/hotburger_target/test/backup_restore_test.dart: validateBackupFile accepts a fresh HOT BURGER database (exported from the live app)                                              
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:03 +15 ~1 -1: /tmp/hotburger_target/test/backup_restore_test.dart: validateBackupFile accepts a fresh HOT BURGER database (exported from the live app)                                              00:03 +16 ~1 -2: /tmp/hotburger_target/test/audit_actor_attribution_test.dart: actor note is never an empty map for a signed-in executor                                                               00:03 +17 ~1 -2: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 3 — bank-only invoice: bankTotal>0, cash/card = 0                                        00:03 +17 ~1 -2: /tmp/hotburger_target/test/backup_restore_test.dart: validateBackupFile accepts a fresh HOT BURGER database (exported from the live app) [E]                                          
+  Expected: true
+    Actual: <false>
+  هيكل قاعدة البيانات غير متطابق: جدول raw_materials مفقود
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 480:18  expect
+  test/backup_restore_test.dart 169:7                 main.<fn>.<fn>
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/backup_restore_test.dart -p vm --plain-name 'validateBackupFile accepts a fresh HOT BURGER database (exported from the live app)'
+00:03 +18 ~1 -2: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 3 — bank-only invoice: bankTotal>0, cash/card = 0                                        00:03 +19 ~1 -2: /tmp/hotburger_target/test/backup_restore_test.dart: validateBackupFile rejects a backup from a newer app release (user_version above dbVersion)                                      00:03 +20 ~1 -2: /tmp/hotburger_target/test/backup_restore_test.dart: validateBackupFile rejects a backup from a newer app release (user_version above dbVersion)                                      00:03 +21 ~1 -2: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 4 — mixed split across invoices: exact per-method amounts                                00:03 +22 ~1 -2: /tmp/hotburger_target/test/backup_restore_test.dart: exportDatabase naming creates a human-readable filename of the new format                                                        00:03 +23 ~1 -2: /tmp/hotburger_target/test/backup_restore_test.dart: exportDatabase naming creates a human-readable filename of the new format                                                        00:03 +23 ~1 -2: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 5 — aggregates multiple invoices of the same and mixed methods                           00:03 +23 ~1 -3: /tmp/hotburger_target/test/backup_restore_test.dart: exportDatabase naming creates exports that pass full validation and carry seeded data [E]                                        
+  Expected: true
+    Actual: <false>
+  هيكل قاعدة البيانات غير متطابق: جدول raw_materials مفقود
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 480:18  expect
+  test/backup_restore_test.dart 217:7                 main.<fn>.<fn>
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/backup_restore_test.dart -p vm --plain-name 'exportDatabase naming creates exports that pass full validation and carry seeded data'
+00:03 +24 ~1 -3: /tmp/hotburger_target/test/backup_restore_test.dart: exportDatabase naming never overwrites an existing backup within the same second                                                 00:03 +25 ~1 -3: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 6 — discount: payment equals the NET total, no duplication                               00:03 +26 ~1 -3: /tmp/hotburger_target/test/backup_restore_test.dart: parseBackupDate parses the new YYYY-MM-DD_HH-mm-ss format                                                                        00:03 +27 ~1 -3: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 7 — returned and voided invoices excluded from payment split                             00:03 +28 ~1 -3: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 7 — returned and voided invoices excluded from payment split                             00:03 +29 ~1 -3: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 7 — returned and voided invoices excluded from payment split                             00:03 +30 ~1 -3: /tmp/hotburger_target/test/backup_restore_test.dart: parseBackupDate returns null for an unrecognized filename                                                                        00:03 +31 ~1 -3: /tmp/hotburger_target/test/bi_payment_distribution_test.dart: BI-F-01 regression matrix TEST 8 — BI payment totals reconcile with the canonical shift payment data for the same window00:03 +31 ~1 -4: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase success restores the backup data into the live database [E]                                                       
+  Exception: النسخة الاحتياطية مرفوضة: هيكل قاعدة البيانات غير متطابق: جدول raw_materials مفقود
+  package:hot_burger_last/core/utils/backup_helper.dart 369:7  BackupHelper.importDatabase
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/backup_restore_test.dart -p vm --plain-name 'importDatabase success restores the backup data into the live database'
+00:03 +32 ~1 -4: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase success writes a restore_performed audit row with actor and confirmation                                          00:04 +32 ~1 -4: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase success writes a restore_performed audit row with actor and confirmation                                          00:04 +32 ~1 -5: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase success writes a restore_performed audit row with actor and confirmation [E]                                      
+  Exception: النسخة الاحتياطية مرفوضة: هيكل قاعدة البيانات غير متطابق: جدول raw_materials مفقود
+  package:hot_burger_last/core/utils/backup_helper.dart 369:7  BackupHelper.importDatabase
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/backup_restore_test.dart -p vm --plain-name 'importDatabase success writes a restore_performed audit row with actor and confirmation'
+00:04 +33 ~1 -5: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase success writes a backup_exported audit row on export                                                              00:04 +33 ~1 -6: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase success writes a backup_exported audit row on export [E]                                                          
+  SqfliteFfiException(sqlite_error: 1, , SqliteException(1): while preparing statement, no such table: invoice_audit_log, SQL logic error (code 1)
+    Causing statement: SELECT * FROM invoice_audit_log WHERE invoice_id = 0 AND action_type = 'backup_exported' ORDER BY id DESC LIMIT 1}) DatabaseException(SqliteException(1): while preparing statement, no such table: invoice_audit_log, SQL logic error (code 1)
+    Causing statement: SELECT * FROM invoice_audit_log WHERE invoice_id = 0 AND action_type = 'backup_exported' ORDER BY id DESC LIMIT 1) sql 'SELECT * FROM invoice_audit_log WHERE invoice_id = 0 AND action_type = 'backup_exported' ORDER BY id DESC LIMIT 1' {details: {database: {path: /tmp/hb_backup_test_TQEHWI/hot_burger.db, id: 34, readOnly: false, singleInstance: true}}}
+  package:sqflite_common_ffi/src/method_call.dart 125:9  responseToResultOrThrow
+  package:sqflite_common_ffi/src/isolate.dart 35:12      SqfliteIsolate.handle
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/backup_restore_test.dart -p vm --plain-name 'importDatabase success writes a backup_exported audit row on export'
+00:04 +34 ~1 -6: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase success deletes the rollback copy only after verified success                                                     00:04 +34 ~1 -7: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase success deletes the rollback copy only after verified success [E]                                                 
+  Exception: النسخة الاحتياطية مرفوضة: هيكل قاعدة البيانات غير متطابق: جدول raw_materials مفقود
+  package:hot_burger_last/core/utils/backup_helper.dart 369:7  BackupHelper.importDatabase
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/backup_restore_test.dart -p vm --plain-name 'importDatabase success deletes the rollback copy only after verified success'
+00:04 +34 ~1 -7: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase pre-flight gate leaves the live database untouched when the backup is rejected                                    00:04 +35 ~1 -7: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase pre-flight gate leaves the live database untouched when the backup is rejected                                    00:04 +35 ~1 -7: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase pre-flight gate records a restore_failed audit row when validation rejects the file                               00:04 +35 ~1 -8: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase pre-flight gate records a restore_failed audit row when validation rejects the file [E]                           
+  SqfliteFfiException(sqlite_error: 1, , SqliteException(1): while preparing statement, no such table: invoice_audit_log, SQL logic error (code 1)
+    Causing statement: SELECT * FROM invoice_audit_log WHERE invoice_id = 0 AND action_type = 'restore_failed' ORDER BY id DESC LIMIT 1}) DatabaseException(SqliteException(1): while preparing statement, no such table: invoice_audit_log, SQL logic error (code 1)
+    Causing statement: SELECT * FROM invoice_audit_log WHERE invoice_id = 0 AND action_type = 'restore_failed' ORDER BY id DESC LIMIT 1) sql 'SELECT * FROM invoice_audit_log WHERE invoice_id = 0 AND action_type = 'restore_failed' ORDER BY id DESC LIMIT 1' {details: {database: {path: /tmp/hb_backup_test_WWJYJT/hot_burger.db, id: 41, readOnly: false, singleInstance: true}}}
+  package:sqflite_common_ffi/src/method_call.dart 125:9  responseToResultOrThrow
+  package:sqflite_common_ffi/src/isolate.dart 35:12      SqfliteIsolate.handle
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/backup_restore_test.dart -p vm --plain-name 'importDatabase pre-flight gate records a restore_failed audit row when validation rejects the file'
+00:04 +35 ~1 -8: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase pre-flight gate leaves the live database untouched when the copy fails                                            00:04 +36 ~1 -8: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase pre-flight gate leaves the live database untouched when the copy fails                                            00:04 +36 ~1 -8: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase rollback restores the original database when a post-swap failure occurs                                           00:04 +36 ~1 -9: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase rollback restores the original database when a post-swap failure occurs [E]                                       
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => Future<void>>
+     Which: threw _Exception:<Exception: النسخة الاحتياطية مرفوضة: هيكل قاعدة البيانات غير متطابق: جدول raw_materials مفقود>
+            stack package:hot_burger_last/core/utils/backup_helper.dart 369:7  BackupHelper.importDatabase
+                  ===== asynchronous gap ===========================
+                  package:matcher                                              expectLater
+                  package:flutter_test/src/widget_tester.dart 517:25           expectLater
+                  test/backup_restore_test.dart 423:13                         main.<fn>.<fn>
+                  ===== asynchronous gap ===========================
+                  dart:async                                                   _CustomZone.registerUnaryCallback
+                  test/backup_restore_test.dart 416:7                          main.<fn>.<fn>
+                  
+            which is not an instance of 'StateError'
+  
+  package:matcher                                     expectLater
+  package:flutter_test/src/widget_tester.dart 517:25  expectLater
+  test/backup_restore_test.dart 423:13                main.<fn>.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                          _CustomZone.registerUnaryCallback
+  test/backup_restore_test.dart 416:7                 main.<fn>.<fn>
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/backup_restore_test.dart -p vm --plain-name 'importDatabase rollback restores the original database when a post-swap failure occurs'
+00:04 +36 ~1 -9: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase rollback records a restore_failed audit row after a rollback                                                      00:04 +36 ~1 -10: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase rollback records a restore_failed audit row after a rollback [E]                                                 
+  Expected: throws <Instance of 'StateError'>
+    Actual: <Closure: () => Future<void>>
+     Which: threw _Exception:<Exception: النسخة الاحتياطية مرفوضة: هيكل قاعدة البيانات غير متطابق: جدول raw_materials مفقود>
+            stack package:hot_burger_last/core/utils/backup_helper.dart 369:7  BackupHelper.importDatabase
+                  ===== asynchronous gap ===========================
+                  package:matcher                                              expectLater
+                  package:flutter_test/src/widget_tester.dart 517:25           expectLater
+                  test/backup_restore_test.dart 455:13                         main.<fn>.<fn>
+                  ===== asynchronous gap ===========================
+                  dart:async                                                   _CustomZone.registerUnaryCallback
+                  test/backup_restore_test.dart 454:26                         main.<fn>.<fn>
+                  
+            which is not an instance of 'StateError'
+  
+  package:matcher                                     expectLater
+  package:flutter_test/src/widget_tester.dart 517:25  expectLater
+  test/backup_restore_test.dart 455:13                main.<fn>.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                          _CustomZone.registerUnaryCallback
+  test/backup_restore_test.dart 454:26                main.<fn>.<fn>
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/backup_restore_test.dart -p vm --plain-name 'importDatabase rollback records a restore_failed audit row after a rollback'
+00:04 +36 ~1 -10: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase rollback reopens a valid database after import so subsequent reads work                                          00:04 +36 ~1 -11: /tmp/hotburger_target/test/backup_restore_test.dart: importDatabase rollback reopens a valid database after import so subsequent reads work [E]                                      
+  Exception: النسخة الاحتياطية مرفوضة: هيكل قاعدة البيانات غير متطابق: جدول raw_materials مفقود
+  package:hot_burger_last/core/utils/backup_helper.dart 369:7  BackupHelper.importDatabase
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/backup_restore_test.dart -p vm --plain-name 'importDatabase rollback reopens a valid database after import so subsequent reads work'
+00:04 +36 ~1 -12: /tmp/hotburger_target/test/backup_restore_test.dart: round trip export then restore preserves identifiable live data [E]                                                             
+  Expected: true
+    Actual: <false>
+  هيكل قاعدة البيانات غير متطابق: جدول raw_materials مفقود
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 480:18  expect
+  test/backup_restore_test.dart 498:7                 main.<fn>.<fn>
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/backup_restore_test.dart -p vm --plain-name 'round trip export then restore preserves identifiable live data'
+00:04 +36 ~1 -13: /tmp/hotburger_target/test/backup_restore_test.dart: round trip data identity semantics: a database with tables + one user row is accepted [E]                                       
+  Expected: true
+    Actual: <false>
+  data identity requires at least one row across identity tables
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 480:18  expect
+  test/backup_restore_test.dart 517:7                 main.<fn>.<fn>
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/backup_restore_test.dart -p vm --plain-name 'round trip data identity semantics: a database with tables + one user row is accepted'
+00:04 +37 ~1 -13: /tmp/hotburger_target/test/cost_snapshot_test.dart: historical profits remain unchanged after ingredient price changes                                                               00:04 +37 ~1 -13: loading /tmp/hotburger_target/test/db_integration_test.dart                                                                                                                          00:04 +37 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group A - migration ladder fresh DB at current version exposes the recipe_snapshot column                                       00:05 +37 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group A - migration ladder fresh DB at current version exposes the recipe_snapshot column                                       00:05 +38 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group A - migration ladder fresh DB at current version exposes the recipe_snapshot column                                       00:05 +38 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group A - migration ladder v1 -> v16 upgrade produces the identical full schema                                                 00:05 +38 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group A - migration ladder v1 -> v16 upgrade produces the identical full schema                                                 
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +39 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group A - migration ladder v1 -> v16 upgrade produces the identical full schema                                                 00:05 +39 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group A - migration ladder v15 -> v16 migration is guarded and repeatable                                                       00:05 +39 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group A - migration ladder v15 -> v16 migration is guarded and repeatable                                                       
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +40 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group A - migration ladder v15 -> v16 migration is guarded and repeatable                                                       00:05 +40 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group B - new sale inventory + audit + snapshot inventory deducts exactly the recipe quantities and audit rows match            00:05 +40 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group B - new sale inventory + audit + snapshot inventory deducts exactly the recipe quantities and audit rows match            
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +41 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group B - new sale inventory + audit + snapshot inventory deducts exactly the recipe quantities and audit rows match            00:05 +41 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group B - new sale inventory + audit + snapshot every invoice line carries an immutable recipe snapshot JSON                    00:05 +41 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group B - new sale inventory + audit + snapshot every invoice line carries an immutable recipe snapshot JSON                    
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +42 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group B - new sale inventory + audit + snapshot every invoice line carries an immutable recipe snapshot JSON                    00:05 +42 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... restoration after recipe change return after recipe change restores the ORIGINAL recipe quantities (snapshot), not current  00:05 +42 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group D/E - historical restoration after recipe change return after recipe change restores the ORIGINAL recipe quantities (snapshot), not current
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +43 ~1 -13: /tmp/hotburger_target/test/financial_calculator_test.dart: FinancialLineItem construction and defensive clamping negative quantity and NaN inputs clamp to zero and do not throw     00:05 +43 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group D/E - historical restoration after recipe change legacy invoice (NULL snapshot) falls back to the current recipe with a warning row
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +44 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... restoration after recipe change legacy invoice (NULL snapshot) falls back to the current recipe with a warning row          00:05 +45 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... restoration after recipe change legacy invoice (NULL snapshot) falls back to the current recipe with a warning row          00:05 +46 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... restoration after recipe change legacy invoice (NULL snapshot) falls back to the current recipe with a warning row          00:05 +47 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... restoration after recipe change legacy invoice (NULL snapshot) falls back to the current recipe with a warning row          00:05 +48 ~1 -13: /tmp/hotburger_target/test/financial_calculator_test.dart: allocateDiscount: proportional allocation with last penny allocations sum exactly to the invoice discount                 00:05 +49 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity duplicate productId lines deduct inventory per LINE and each keeps its own snapshot   00:05 +49 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group C/F/G/H - duplicates, void, guards, atomicity duplicate productId lines deduct inventory per LINE and each keeps its own snapshot
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +50 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity duplicate productId lines deduct inventory per LINE and each keeps its own snapshot   00:05 +51 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity duplicate productId lines deduct inventory per LINE and each keeps its own snapshot   00:05 +52 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity duplicate productId lines deduct inventory per LINE and each keeps its own snapshot   00:05 +53 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity duplicate productId lines deduct inventory per LINE and each keeps its own snapshot   00:05 +54 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity duplicate productId lines deduct inventory per LINE and each keeps its own snapshot   00:05 +55 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity duplicate productId lines deduct inventory per LINE and each keeps its own snapshot   00:05 +56 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity duplicate productId lines deduct inventory per LINE and each keeps its own snapshot   00:05 +57 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity duplicate productId lines deduct inventory per LINE and each keeps its own snapshot   00:05 +58 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity duplicate productId lines deduct inventory per LINE and each keeps its own snapshot   00:05 +58 ~1 -13: /tmp/hotburger_target/test/financial_calculator_test.dart: aggregateSummary and FinancialSummary aggregation clamps NaN and infinite input values to zero                            00:05 +58 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group C/F/G/H - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +59 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +60 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +61 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +62 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +63 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +64 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +65 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +66 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +67 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +68 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +69 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +70 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +71 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +72 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +73 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +74 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: ... - duplicates, void, guards, atomicity void restores exactly the deduplicated line totals (snapshots) and flips status       00:05 +74 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group C/F/G/H - duplicates, void, guards, atomicity return-then-void and void-of-returned are both rejected                     00:05 +74 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group C/F/G/H - duplicates, void, guards, atomicity return-then-void and void-of-returned are both rejected                     
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +75 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group C/F/G/H - duplicates, void, guards, atomicity return-then-void and void-of-returned are both rejected                     00:05 +75 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group C/F/G/H - duplicates, void, guards, atomicity guard: insufficient stock blocks the sale with zero mutations               00:05 +75 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group C/F/G/H - duplicates, void, guards, atomicity guard: insufficient stock blocks the sale with zero mutations               
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +76 ~1 -13: /tmp/hotburger_target/test/r04_supplier_payment_audit_test.dart: Phase 4.7.2 — R-04: supplier payment audit closure successful supplier payment creates EXACTLY ONE audit row        00:05 +76 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Group C/F/G/H - duplicates, void, guards, atomicity bad totals are rejected before touching inventory                           
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +77 ~1 -13: /tmp/hotburger_target/test/r04_supplier_payment_audit_test.dart: Phase 4.7.2 — R-04: supplier payment audit closure successful supplier payment creates EXACTLY ONE audit row        00:05 +77 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteIngredientSafe blocks when purchase invoices reference it                          
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +78 ~1 -13: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteIngredientSafe blocks when purchase invoices reference it                          00:05 +78 ~1 -14: /tmp/hotburger_target/test/r04_supplier_payment_audit_test.dart: Phase 4.7.2 — R-04: supplier payment audit closure payment, balance, and audit commit TOGETHER in one transaction   
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +78 ~1 -14: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteIngredientSafe blocks when purchase invoices reference it [E]                      
+  Expected: throws <Instance of 'SafeDeleteBlockedException'>
+    Actual: <Closure: () => Future<int>>
+     Which: threw _Exception:<Exception: لا يمكن حذف المادة الخام: مستخدمة في فواتير شراء سابقة>
+            stack package:hot_burger_last/providers/app_provider.dart 1060:7  AppProvider.deleteIngredient
+                  ===== asynchronous gap ===========================
+                  package:matcher                                             expectLater
+                  package:flutter_test/src/widget_tester.dart 517:25          expectLater
+                  test/db_integration_test.dart 429:13                        main.<fn>.<fn>
+                  ===== asynchronous gap ===========================
+                  dart:async                                                  _CustomZone.registerUnaryCallback
+                  test/db_integration_test.dart 408:19                        main.<fn>.<fn>
+                  
+            which is not an instance of 'SafeDeleteBlockedException'
+  
+  package:matcher                                     expectLater
+  package:flutter_test/src/widget_tester.dart 517:25  expectLater
+  test/db_integration_test.dart 429:13                main.<fn>.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                          _CustomZone.registerUnaryCallback
+  test/db_integration_test.dart 408:19                main.<fn>.<fn>
+  
+00:05 +79 ~1 -14: /tmp/hotburger_target/test/r04_supplier_payment_audit_test.dart: Phase 4.7.2 — R-04: supplier payment audit closure payment, balance, and audit commit TOGETHER in one transaction   
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/db_integration_test.dart -p vm --plain-name 'Phase 4.1 - destructive safety closure deleteIngredientSafe blocks when purchase invoices reference it'
+00:05 +79 ~1 -14: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteIngredientSafe blocks with impact detail when recipe links exist                   00:05 +79 ~1 -14: /tmp/hotburger_target/test/r04_supplier_payment_audit_test.dart: Phase 4.7.2 — R-04: supplier payment audit closure audit failure ROLLS BACK the payment and the balance             
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +79 ~1 -14: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteIngredientSafe blocks with impact detail when recipe links exist                   
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +80 ~1 -14: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteIngredientSafe blocks with impact detail when recipe links exist                   00:05 +80 ~1 -14: /tmp/hotburger_target/test/r04_supplier_payment_audit_test.dart: Phase 4.7.2 — R-04: supplier payment audit closure multiple payments produce distinct, correctly-linked audit rows  
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +80 ~1 -15: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteIngredientSafe blocks with impact detail when recipe links exist [E]               
+  Expected: throws <Instance of 'SafeDeleteBlockedException'>
+    Actual: <Closure: () => Future<int>>
+     Which: threw _Exception:<Exception: المادة الخام مرتبطة بوصفة منتج؛ يجب حذف الروابط أولاً>
+            stack package:hot_burger_last/providers/app_provider.dart 1060:7  AppProvider.deleteIngredient
+                  ===== asynchronous gap ===========================
+                  package:matcher                                             expectLater
+                  package:flutter_test/src/widget_tester.dart 517:25          expectLater
+                  test/db_integration_test.dart 448:13                        main.<fn>.<fn>
+                  ===== asynchronous gap ===========================
+                  dart:async                                                  _CustomZone.registerUnaryCallback
+                  test/db_integration_test.dart 445:19                        main.<fn>.<fn>
+                  
+            which is not an instance of 'SafeDeleteBlockedException'
+  
+  package:matcher                                     expectLater
+  package:flutter_test/src/widget_tester.dart 517:25  expectLater
+  test/db_integration_test.dart 448:13                main.<fn>.<fn>
+  ===== asynchronous gap ===========================
+  dart:async                                          _CustomZone.registerUnaryCallback
+  test/db_integration_test.dart 445:19                main.<fn>.<fn>
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/db_integration_test.dart -p vm --plain-name 'Phase 4.1 - destructive safety closure deleteIngredientSafe blocks with impact detail when recipe links exist'
+00:05 +80 ~1 -15: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure explicit force delete removes links, material and writes an override audit row           
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +81 ~1 -15: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure explicit force delete removes links, material and writes an override audit row           00:05 +81 ~1 -15: /tmp/hotburger_target/test/r04_supplier_payment_audit_test.dart: Phase 4.7.2 — R-04: supplier payment audit closure audit actor matches the current authenticated user               
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +82 ~1 -15: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure explicit force delete removes links, material and writes an override audit row           00:05 +82 ~1 -15: /tmp/hotburger_target/test/r04_supplier_payment_audit_test.dart: Phase 4.7.2 — R-04: supplier payment audit closure historical payments (inserted before the fix) get NO fabricated audit
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +82 ~1 -16: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure explicit force delete removes links, material and writes an override audit row [E]       
+  Expected: true
+    Actual: <false>
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 480:18  expect
+  test/db_integration_test.dart 478:7                 main.<fn>.<fn>
+  
+00:05 +83 ~1 -16: /tmp/hotburger_target/test/r04_supplier_payment_audit_test.dart: ... — R-04: supplier payment audit closure historical payments (inserted before the fix) get NO fabricated audit    
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/db_integration_test.dart -p vm --plain-name 'Phase 4.1 - destructive safety closure explicit force delete removes links, material and writes an override audit row'
+00:05 +83 ~1 -16: /tmp/hotburger_target/test/r04_supplier_payment_audit_test.dart: Phase 4.7.2 — R-04: supplier payment audit closure existing callers without actor params remain compatible          00:05 +83 ~1 -16: /tmp/hotburger_target/test/r04_supplier_payment_audit_test.dart: Phase 4.7.2 — R-04: supplier payment audit closure existing callers without actor params remain compatible          
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +83 ~1 -16: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteIngredientSafe on an unused material deletes and audits without override           
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +84 ~1 -16: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteIngredientSafe on an unused material deletes and audits without override           00:05 +84 ~1 -17: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteIngredientSafe on an unused material deletes and audits without override [E]       
+  Expected: true
+    Actual: <false>
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 480:18  expect
+  test/db_integration_test.dart 497:7                 main.<fn>.<fn>
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/db_integration_test.dart -p vm --plain-name 'Phase 4.1 - destructive safety closure deleteIngredientSafe on an unused material deletes and audits without override'
+00:05 +84 ~1 -17: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteProductSafe audits the recipe links it destroys (L-3)                              00:05 +84 ~1 -17: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteProductSafe audits the recipe links it destroys (L-3)                              
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +84 ~1 -18: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteProductSafe audits the recipe links it destroys (L-3) [E]                          
+  Expected: true
+    Actual: <false>
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 480:18  expect
+  test/db_integration_test.dart 508:7                 main.<fn>.<fn>
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/db_integration_test.dart -p vm --plain-name 'Phase 4.1 - destructive safety closure deleteProductSafe audits the recipe links it destroys (L-3)'
+00:05 +84 ~1 -18: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteSupplierSafe blocks when payments exist (L-2)                                      00:05 +84 ~1 -18: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteSupplierSafe blocks when payments exist (L-2)                                      
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +85 ~1 -18: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteSupplierSafe blocks when payments exist (L-2)                                      00:05 +85 ~1 -18: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteSupplierSafe blocks when purchase invoices exist (L-2)                             00:05 +85 ~1 -18: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteSupplierSafe blocks when purchase invoices exist (L-2)                             
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +86 ~1 -18: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteSupplierSafe blocks when purchase invoices exist (L-2)                             00:05 +86 ~1 -18: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteSupplierSafe on a clean supplier deletes and audits                                00:05 +86 ~1 -18: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteSupplierSafe on a clean supplier deletes and audits                                
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +87 ~1 -18: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteSupplierSafe on a clean supplier deletes and audits                                00:05 +87 ~1 -18: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteProductIngredientSafe audits each removed recipe link (L-4)                        00:05 +87 ~1 -18: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteProductIngredientSafe audits each removed recipe link (L-4)                        
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +87 ~1 -19: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteProductIngredientSafe audits each removed recipe link (L-4) [E]                    
+  Expected: an object with length of <1>
+    Actual: [
+              {'id': 1, 'product_id': 1, 'ingredient_id': 1, 'quantity': 2.0, 'unit': null},
+              {
+                'id': 2,
+                'product_id': 1,
+                'ingredient_id': 2,
+                'quantity': 100.0,
+                'unit': null
+              }
+            ]
+     Which: has length of <2>
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 480:18  expect
+  test/db_integration_test.dart 577:7                 main.<fn>.<fn>
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/db_integration_test.dart -p vm --plain-name 'Phase 4.1 - destructive safety closure deleteProductIngredientSafe audits each removed recipe link (L-4)'
+00:05 +87 ~1 -19: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteExpenseSafe audits the removed amount (L-4)                                        00:05 +87 ~1 -19: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteExpenseSafe audits the removed amount (L-4)                                        
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +88 ~1 -19: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteExpenseSafe audits the removed amount (L-4)                                        00:05 +88 ~1 -19: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure legacy fallback with NO current recipe links logs an explicit diagnostic (L-1)           00:05 +88 ~1 -19: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure legacy fallback with NO current recipe links logs an explicit diagnostic (L-1)           
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:05 +88 ~1 -20: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure legacy fallback with NO current recipe links logs an explicit diagnostic (L-1) [E]       
+  Expected: true
+    Actual: <false>
+  
+  package:matcher                                     expect
+  package:flutter_test/src/widget_tester.dart 480:18  expect
+  test/db_integration_test.dart 641:7                 main.<fn>.<fn>
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/db_integration_test.dart -p vm --plain-name 'Phase 4.1 - destructive safety closure legacy fallback with NO current recipe links logs an explicit diagnostic (L-1)'
+00:05 +88 ~1 -20: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure legacy fallback WITH current links verifies link count in diagnostics (L-1)              00:05 +88 ~1 -20: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure legacy fallback WITH current links verifies link count in diagnostics (L-1)              
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +89 ~1 -20: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure legacy fallback WITH current links verifies link count in diagnostics (L-1)              00:06 +89 ~1 -20: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure impact preview reports all products sharing the same material                            00:06 +89 ~1 -20: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure impact preview reports all products sharing the same material                            
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +89 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure impact preview reports all products sharing the same material [E]                        
+  type 'Null' is not a subtype of type 'List<dynamic>' in type cast
+  test/db_integration_test.dart 697:49  main.<fn>.<fn>
+  
+
+To run this test again: /home/ubuntu/flutter/bin/cache/dart-sdk/bin/dart test /tmp/hotburger_target/test/db_integration_test.dart -p vm --plain-name 'Phase 4.1 - destructive safety closure impact preview reports all products sharing the same material'
+00:06 +89 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure force=false delete on an unlinked material must NOT touch linked ingredients             00:06 +89 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure force=false delete on an unlinked material must NOT touch linked ingredients             
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +90 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure force=false delete on an unlinked material must NOT touch linked ingredients             00:06 +90 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: ... 4.1 - destructive safety closure deleteIngredientSafe is atomic: audit row written inside the same transaction as the delete00:06 +90 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.1 - destructive safety closure deleteIngredientSafe is atomic: audit row written inside the same transaction as the delete
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +91 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: ... 4.1 - destructive safety closure deleteIngredientSafe is atomic: audit row written inside the same transaction as the delete00:06 +91 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 1 — normal invoice exposes gross/discount/net/COGS/gross profit                   00:06 +91 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 1 — normal invoice exposes gross/discount/net/COGS/gross profit                   
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +92 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 1 — normal invoice exposes gross/discount/net/COGS/gross profit                   00:06 +92 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 2 — invoice with discount uses the centralized calculator semantics               00:06 +92 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 2 — invoice with discount uses the centralized calculator semantics               
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +93 ~1 -21: /tmp/hotburger_target/test/recipe_snapshot_test.dart: snapshot codec round-trip preserves ingredients, quantities, names, costs                                                      00:06 +93 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 3 — COGS stays historical after current ingredient cost changes                   
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +94 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 3 — COGS stays historical after current ingredient cost changes                   00:06 +95 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 3 — COGS stays historical after current ingredient cost changes                   00:06 +96 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 3 — COGS stays historical after current ingredient cost changes                   00:06 +97 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 3 — COGS stays historical after current ingredient cost changes                   00:06 +98 ~1 -21: /tmp/hotburger_target/test/recipe_snapshot_test.dart: snapshot codec a row with qty exactly zero survives as a genuine zero-usage recipe                                             00:06 +99 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 4 — recipe change after sale does not alter shift financials                      00:06 +99 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 4 — recipe change after sale does not alter shift financials                      
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +100 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 4 — recipe change after sale does not alter shift financials                     00:06 +101 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 4 — recipe change after sale does not alter shift financials                     00:06 +102 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 4 — recipe change after sale does not alter shift financials                     00:06 +103 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 4 — recipe change after sale does not alter shift financials                     00:06 +104 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 4 — recipe change after sale does not alter shift financials                     00:06 +105 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 4 — recipe change after sale does not alter shift financials                     00:06 +106 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 4 — recipe change after sale does not alter shift financials                     00:06 +107 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 4 — recipe change after sale does not alter shift financials                     00:06 +108 ~1 -21: /tmp/hotburger_target/test/recipe_snapshot_test.dart: restoration policy #5 — legacy invoice line falls back to current recipe (explicit)                                           00:06 +109 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 5 — returned sale is excluded by the same semantics as other reports             00:06 +109 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 5 — returned sale is excluded by the same semantics as other reports             
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +110 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 5 — returned sale is excluded by the same semantics as other reports             00:06 +111 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 5 — returned sale is excluded by the same semantics as other reports             00:06 +112 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 5 — returned sale is excluded by the same semantics as other reports             00:06 +113 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 5 — returned sale is excluded by the same semantics as other reports             00:06 +114 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 5 — returned sale is excluded by the same semantics as other reports             00:06 +114 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 6 — voided sale follows the same exclusion semantics                             00:06 +114 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 6 — voided sale follows the same exclusion semantics                             
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +115 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 6 — voided sale follows the same exclusion semantics                             00:06 +115 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 7 — multiple invoices aggregate to the centralized calculator total              00:06 +115 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 7 — multiple invoices aggregate to the centralized calculator total              
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +116 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 7 — multiple invoices aggregate to the centralized calculator total              00:06 +116 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 8 — repeated productId in one invoice keeps discount allocation correct          00:06 +116 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 8 — repeated productId in one invoice keeps discount allocation correct          
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +117 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 8 — repeated productId in one invoice keeps discount allocation correct          00:06 +117 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 9 — discount equal to gross cannot make net revenue negative                     00:06 +117 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 9 — discount equal to gross cannot make net revenue negative                     
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +118 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 9 — discount equal to gross cannot make net revenue negative                     00:06 +118 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 10 — empty shift returns safe zero values for all financial metrics              00:06 +118 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 10 — empty shift returns safe zero values for all financial metrics              
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +119 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 10 — empty shift returns safe zero values for all financial metrics              00:06 +119 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 11 — legacy invoice (no cost_snapshot) inherits the calculator fallback          00:06 +119 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 11 — legacy invoice (no cost_snapshot) inherits the calculator fallback          
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +120 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 11 — legacy invoice (no cost_snapshot) inherits the calculator fallback          00:06 +120 ~1 -21: loading /tmp/hotburger_target/test/phase6_12_integrity_test.dart                                                                                                                    00:06 +120 ~1 -21: /tmp/hotburger_target/test/phase6_12_integrity_test.dart: Phase 6.12: Material ID & Unit Integrity INT-001: Material ID Mapping and Unit Consistency across Purchase Items          00:06 +120 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 12 — payment breakdown values are unchanged (regression)                         
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +121 ~1 -21: /tmp/hotburger_target/test/phase6_12_integrity_test.dart: Phase 6.12: Material ID & Unit Integrity INT-001: Material ID Mapping and Unit Consistency across Purchase Items          00:06 +121 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 13 — shift financials equal the centralized P&L summary for the same period      
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +122 ~1 -21: /tmp/hotburger_target/test/phase6_12_integrity_test.dart: Phase 6.12: Material ID & Unit Integrity INT-001: Material ID Mapping and Unit Consistency across Purchase Items          00:06 +122 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 14 — shift consumes the centralized calculator (no duplicate engine)             
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +123 ~1 -21: /tmp/hotburger_target/test/phase6_12_integrity_test.dart: Phase 6.12: Material ID & Unit Integrity INT-001: Material ID Mapping and Unit Consistency across Purchase Items          00:06 +123 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 15 — discount greater than subtotal is rejected at the validation gate           
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +124 ~1 -21: /tmp/hotburger_target/test/phase6_12_integrity_test.dart: Phase 6.12: Material ID & Unit Integrity INT-001: Material ID Mapping and Unit Consistency across Purchase Items          00:06 +124 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.2.1 - shift financial disclosure TEST 16 — insufficient ingredient stock is rejected at the validation gate            
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +125 ~1 -21: /tmp/hotburger_target/test/phase6_12_integrity_test.dart: Phase 6.12: Material ID & Unit Integrity INT-001: Material ID Mapping and Unit Consistency across Purchase Items          00:06 +125 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure F-02: ingredient delete records the actor who executed it                           
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +126 ~1 -21: /tmp/hotburger_target/test/phase6_12_integrity_test.dart: Phase 6.12: Material ID & Unit Integrity INT-001: Material ID Mapping and Unit Consistency across Purchase Items          00:06 +127 ~1 -21: /tmp/hotburger_target/test/phase6_12_integrity_test.dart: Phase 6.12: Material ID & Unit Integrity INT-001: Material ID Mapping and Unit Consistency across Purchase Items          00:06 +127 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure F-02: supplier + expense deletes record the actor (previously silent)               00:06 +127 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure F-02: supplier + expense deletes record the actor (previously silent)               
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +127 ~1 -21: /tmp/hotburger_target/test/phase6_12_integrity_test.dart: Phase 6.12: Material ID & Unit Integrity INT-002: Prevent Duplicate Supplier Tax Numbers                                  
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +128 ~1 -21: /tmp/hotburger_target/test/phase6_12_integrity_test.dart: Phase 6.12: Material ID & Unit Integrity INT-002: Prevent Duplicate Supplier Tax Numbers                                  00:06 +128 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure F-01: a real deletion reason is written under the exact deletion_reason key         
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +129 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure F-01: a real deletion reason is written under the exact deletion_reason key         00:06 +130 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure F-01: a real deletion reason is written under the exact deletion_reason key         00:06 +130 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure F-01: empty/whitespace reasons are NEVER written (no fabricated reason)             00:06 +130 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure F-01: empty/whitespace reasons are NEVER written (no fabricated reason)             
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +131 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure F-01: empty/whitespace reasons are NEVER written (no fabricated reason)             00:06 +131 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure F-01: reason key is identical across all five safe-delete note formats              00:06 +131 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure F-01: reason key is identical across all five safe-delete note formats              
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +132 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure F-01: reason key is identical across all five safe-delete note formats              00:06 +132 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure DELETE + audit stay in one transaction: a failed audit roll-backs the deletion      00:06 +132 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure DELETE + audit stay in one transaction: a failed audit roll-backs the deletion      
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +133 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure DELETE + audit stay in one transaction: a failed audit roll-backs the deletion      00:06 +133 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure backward compatibility: old plain-text notes do not crash the parser                00:06 +133 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure backward compatibility: old plain-text notes do not crash the parser                
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:06 +134 ~1 -21: /tmp/hotburger_target/test/db_integration_test.dart: Phase 4.3.1.1 - audit traceability closure backward compatibility: old plain-text notes do not crash the parser                00:06 +134 ~1 -21: loading /tmp/hotburger_target/test/phase6_12_legacy_test.dart                                                                                                                       00:06 +134 ~1 -21: /tmp/hotburger_target/test/phase6_12_legacy_test.dart: Phase 6.12: Legacy Data & Migration Integrity LEGACY-001: Verify Purchase Items bridge for historical Ingredient ID          00:07 +134 ~1 -21: /tmp/hotburger_target/test/phase6_12_legacy_test.dart: Phase 6.12: Legacy Data & Migration Integrity LEGACY-001: Verify Purchase Items bridge for historical Ingredient ID          00:07 +135 ~1 -21: /tmp/hotburger_target/test/phase6_12_legacy_test.dart: Phase 6.12: Legacy Data & Migration Integrity LEGACY-001: Verify Purchase Items bridge for historical Ingredient ID          00:07 +135 ~1 -21: loading /tmp/hotburger_target/test/phase6_12_multi_item_purchase_test.dart                                                                                                          00:07 +135 ~1 -21: /tmp/hotburger_target/test/phase6_12_multi_item_purchase_test.dart: ... & Financial Reconciliation PROC-MULTI: Verify Multi-item Invoice Sum, Database Consistency and Audit Logs   00:07 +136 ~1 -21: /tmp/hotburger_target/test/phase6_12_wac_golden_scenario_test.dart: ... Golden Scenario Verification WAC-GOLDEN: Multi-step Purchase WAC Verification (100@100 -> 100@200 -> 50@300)00:07 +137 ~1 -21: /tmp/hotburger_target/test/phase6_12_wac_golden_scenario_test.dart: ... Golden Scenario Verification WAC-GOLDEN: Multi-step Purchase WAC Verification (100@100 -> 100@200 -> 50@300)00:07 +137 ~1 -21: loading /tmp/hotburger_target/test/phase6_13_direct_sales_test.dart                                                                                                                 00:07 +137 ~1 -21: /tmp/hotburger_target/test/phase6_13_direct_sales_test.dart: ... Material Product Sales Test Sale of product with direct raw material deducts inventory and records COGS correctly  00:08 +137 ~1 -21: /tmp/hotburger_target/test/phase6_13_direct_sales_test.dart: ... Material Product Sales Test Sale of product with direct raw material deducts inventory and records COGS correctly  00:08 +138 ~1 -21: /tmp/hotburger_target/test/phase6_13_direct_sales_test.dart: ... Material Product Sales Test Sale of product with direct raw material deducts inventory and records COGS correctly  00:08 +138 ~1 -21: loading /tmp/hotburger_target/test/phase6_13_edge_cases_test.dart                                                                                                                   00:08 +138 ~1 -21: /tmp/hotburger_target/test/phase6_13_edge_cases_test.dart: Phase 6.13: Edge Cases and Audit Safety Test Insufficient stock should block sale (Negative Stock Protection)            00:08 +139 ~1 -21: /tmp/hotburger_target/test/phase6_13_edge_cases_test.dart: Phase 6.13: Edge Cases and Audit Safety Test Insufficient stock should block sale (Negative Stock Protection)            00:08 +139 ~1 -21: /tmp/hotburger_target/test/phase6_13_edge_cases_test.dart: Phase 6.13: Edge Cases and Audit Safety Test Voiding an invoice restores inventory and reverses financial impact         00:08 +139 ~1 -21: /tmp/hotburger_target/test/phase6_13_edge_cases_test.dart: Phase 6.13: Edge Cases and Audit Safety Test Voiding an invoice restores inventory and reverses financial impact         
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:08 +140 ~1 -21: /tmp/hotburger_target/test/phase6_13_golden_day_test.dart: Phase 6.13: Golden Restaurant Day E2E Test Full operational cycle: Purchase -> Production -> Sale -> Audit -> Report     00:08 +140 ~1 -21: /tmp/hotburger_target/test/phase6_13_edge_cases_test.dart: Phase 6.13: Edge Cases and Audit Safety Test Reversal after WAC change uses historical cost for reversal                 
+*** sqflite warning ***
+
+You are changing sqflite default factory.
+Be aware of the potential side effects. Any library using sqflite
+will have this factory as the default for all operations.
+
+*** sqflite warning ***
+
+00:08 +141 ~1 -21: /tmp/hotburger_target/test/phase6_13_golden_day_test.dart: Phase 6.13: Golden Restaurant Day E2E Test Full operational cycle: Purchase -> Production -> Sale -> Audit -> Report     00:08 +142 ~1 -21: /tmp/hotburger_target/test/phase6_13_golden_day_test.dart: Phase 6.13: Golden Restaurant Day E2E Test Full operational cycle: Purchase -> Production -> Sale -> Audit -> Report     00:08 +142 ~1 -21: loading /tmp/hotburger_target/test/phase6_13_prepared_materials_test.dart                                                                                                           00:08 +142 ~1 -21: /tmp/hotburger_target/test/phase6_13_prepared_materials_test.dart: ... Sales Test Sale of product with prepared material (multi-level) calculates COGS and deducts stock correctly  00:08 +143 ~1 -21: /tmp/hotburger_target/test/phase6_13_prepared_materials_test.dart: ... Sales Test Sale of product with prepared material (multi-level) calculates COGS and deducts stock correctly  00:09 +143 ~1 -21: /tmp/hotburger_target/test/phase6_13_prepared_materials_test.dart: ... Sales Test Sale of product with prepared material (multi-level) calculates COGS and deducts stock correctly  00:09 +143 ~1 -21: loading /tmp/hotburger_target/test/phase6_13_reports_consistency_test.dart                                                                                                          00:09 +143 ~1 -21: /tmp/hotburger_target/test/phase6_13_reports_consistency_test.dart: ... Reports Consistency Test Financial summary (P&L) matches independent calculation from invoices and expenses 00:09 +144 ~1 -21: /tmp/hotburger_target/test/phase6_13_wac_cogs_immutability_test.dart: ... and Historical Immutability Test WAC changes correctly affect future sales but preserve historical COGS   00:09 +145 ~1 -21: /tmp/hotburger_target/test/phase6_13_wac_cogs_immutability_test.dart: ... and Historical Immutability Test WAC changes correctly affect future sales but preserve historical COGS   00:09 +145 ~1 -21: Some tests failed.                                                                                                                                                                  

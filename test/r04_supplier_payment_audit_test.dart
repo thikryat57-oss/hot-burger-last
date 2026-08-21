@@ -59,6 +59,10 @@ void main() {
       DatabaseHelper.resetTestAuditFailure();
       db = await openIntegrationTestDatabase();
       DatabaseHelper.useTestDatabase(db);
+      // Ensure test isolation by clearing relevant tables
+      await db.delete('inventory_audit_log');
+      await db.delete('supplier_payments');
+      await db.delete('suppliers');
     });
 
     tearDown(() {
